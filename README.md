@@ -53,10 +53,10 @@ starter-template/
 
 1. Allez sur [supabase.com](https://supabase.com)
 2. Creez un nouveau projet
-3. Notez les credentials :
+3. Notez les credentials (Settings > API) :
    - `SUPABASE_URL`
-   - `SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_KEY` (Settings > API > service_role)
+   - `SUPABASE_PUBLISHABLE_KEY` (Publishable key)
+   - `SUPABASE_SECRET_KEY` (Secret key)
 
 ### 2. Executer les scripts SQL
 
@@ -190,7 +190,7 @@ DELETE /api/type-profils/{id}     # Supprimer type (admin)
 - Root Directory: `frontend`
 - Variables d'environnement a configurer :
   - `REACT_APP_SUPABASE_URL`
-  - `REACT_APP_SUPABASE_ANON_KEY`
+  - `REACT_APP_SUPABASE_PUBLISHABLE_KEY`
   - `REACT_APP_API_URL` (URL du backend)
   - `CI=false` (ignore les warnings ESLint)
 
@@ -200,8 +200,8 @@ DELETE /api/type-profils/{id}     # Supprimer type (admin)
 - Start Command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 - Variables d'environnement a configurer :
   - `SUPABASE_URL`
-  - `SUPABASE_ANON_KEY`
-  - `SUPABASE_SERVICE_KEY`
+  - `SUPABASE_PUBLISHABLE_KEY`
+  - `SUPABASE_SECRET_KEY`
 
 ### CORS
 

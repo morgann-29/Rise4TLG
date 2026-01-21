@@ -4,16 +4,16 @@ from supabase import create_client, Client
 from app.config import settings
 from typing import Optional
 
-# Client Supabase normal (anon key) - pour users authentifies
+# Client Supabase normal (publishable key) - pour users authentifies
 supabase: Client = create_client(
     settings.supabase_url,
-    settings.supabase_anon_key
+    settings.supabase_publishable_key
 )
 
-# Client Supabase admin (service_role key) - pour operations admin (bypass RLS)
+# Client Supabase admin (secret key) - pour operations admin (bypass RLS)
 supabase_admin: Client = create_client(
     settings.supabase_url,
-    settings.supabase_service_key
+    settings.supabase_secret_key
 )
 
 # Security scheme pour Bearer token
