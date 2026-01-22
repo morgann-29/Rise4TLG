@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth, admin, profile, type_profile
+from app.routers import auth, admin, profile, type_profile, type_support, type_seance, work_lead_type, project, group, file, work_lead_master
 
 app = FastAPI(
     title="Starter API",
@@ -34,6 +34,19 @@ app.include_router(admin.router)
 # Routers - Profils
 app.include_router(profile.router)
 app.include_router(type_profile.router)
+
+# Routers - Types (reference tables)
+app.include_router(type_support.router)
+app.include_router(type_seance.router)
+app.include_router(work_lead_type.router)
+
+# Routers - Metier
+app.include_router(project.router)
+app.include_router(group.router)
+app.include_router(work_lead_master.router)
+
+# Routers - Fichiers
+app.include_router(file.router)
 
 # TODO: Ajouter vos routers metier ici
 # from app.routers import your_router

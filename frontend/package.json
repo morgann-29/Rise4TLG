@@ -4,11 +4,18 @@
   "private": true,
   "dependencies": {
     "@supabase/supabase-js": "^2.90.1",
+    "@tiptap/extension-image": "^3.16.0",
+    "@tiptap/extension-link": "^3.16.0",
+    "@tiptap/extension-placeholder": "^3.16.0",
+    "@tiptap/pm": "^3.16.0",
+    "@tiptap/react": "^3.16.0",
+    "@tiptap/starter-kit": "^3.16.0",
     "axios": "^1.13.2",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-router-dom": "^7.12.0",
-    "react-scripts": "5.0.1"
+    "react-scripts": "5.0.1",
+    "tui-image-editor": "^3.15.3"
   },
   "scripts": {
     "start": "react-scripts start",

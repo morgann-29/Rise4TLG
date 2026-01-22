@@ -137,24 +137,24 @@ CREATE TRIGGER update_project_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
--- Trigger: Vérifier que profile_id est un Coach (type_profile_id = 3)
-CREATE OR REPLACE FUNCTION check_project_owner_is_coach()
+-- Trigger: Vérifier que profile_id est un Navigant (type_profile_id = 4)
+CREATE OR REPLACE FUNCTION check_project_owner_is_navigant()
 RETURNS TRIGGER AS $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM profile p
-        WHERE p.id = NEW.profile_id AND p.type_profile_id = 3  -- Coach
+        WHERE p.id = NEW.profile_id AND p.type_profile_id = 4  -- Navigant
     ) THEN
-        RAISE EXCEPTION 'Le propriétaire du projet doit être un Coach (type_profile_id = 3)';
+        RAISE EXCEPTION 'Le propriétaire du projet doit être un Navigant (type_profile_id = 4)';
     END IF;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trigger_check_project_owner_is_coach
+CREATE TRIGGER trigger_check_project_owner_is_navigant
     BEFORE INSERT OR UPDATE OF profile_id ON project
     FOR EACH ROW
-    EXECUTE FUNCTION check_project_owner_is_coach();
+    EXECUTE FUNCTION check_project_owner_is_navigant();
 
 -- Groupe
 CREATE TABLE IF NOT EXISTS "group" (
@@ -203,7 +203,7 @@ CREATE TABLE IF NOT EXISTS session_master (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name TEXT NOT NULL,
     profile_id UUID NOT NULL REFERENCES profile(id) ON DELETE RESTRICT,  -- créateur
-    group_id UUID NOT NULL REFERENCES "group"(id) ON DELETE RESTRICT,
+    group_id UUID REFERENCES "group"(id) ON DELETE RESTRICT,  -- nullable pour sessions hors groupe
     type_seance_id INTEGER NOT NULL REFERENCES type_seance(id) ON DELETE RESTRICT,
     coach_id UUID REFERENCES profile(id) ON DELETE SET NULL,  -- coach présent (peut être différent du créateur)
     date_start TIMESTAMP WITH TIME ZONE,  -- nullable pour séances "template"

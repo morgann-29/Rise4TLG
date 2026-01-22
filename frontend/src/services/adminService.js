@@ -82,5 +82,88 @@ export const adminService = {
   async getTypeProfiles() {
     const response = await api.get('/api/type-profiles')
     return response.data
+  },
+
+  // ============================================
+  // TYPE SUPPORT (referentiel)
+  // ============================================
+
+  async getTypeSupports() {
+    const response = await api.get('/api/type-supports')
+    return response.data
+  },
+
+  async createTypeSupport(data) {
+    const response = await api.post('/api/type-supports', data)
+    return response.data
+  },
+
+  async updateTypeSupport(id, data) {
+    const response = await api.put(`/api/type-supports/${id}`, data)
+    return response.data
+  },
+
+  async deleteTypeSupport(id) {
+    await api.delete(`/api/type-supports/${id}`)
+  },
+
+  // ============================================
+  // TYPE SEANCE (referentiel)
+  // ============================================
+
+  async getTypeSeances(includeDeleted = false) {
+    const response = await api.get('/api/type-seances', {
+      params: { include_deleted: includeDeleted }
+    })
+    return response.data
+  },
+
+  async createTypeSeance(data) {
+    const response = await api.post('/api/type-seances', data)
+    return response.data
+  },
+
+  async updateTypeSeance(id, data) {
+    const response = await api.put(`/api/type-seances/${id}`, data)
+    return response.data
+  },
+
+  async deleteTypeSeance(id) {
+    await api.delete(`/api/type-seances/${id}`)
+  },
+
+  async restoreTypeSeance(id) {
+    const response = await api.post(`/api/type-seances/${id}/restore`)
+    return response.data
+  },
+
+  // ============================================
+  // WORK LEAD TYPE (referentiel - axes de travail)
+  // ============================================
+
+  async getWorkLeadTypes(includeDeleted = false) {
+    const response = await api.get('/api/work-lead-types', {
+      params: { include_deleted: includeDeleted }
+    })
+    return response.data
+  },
+
+  async createWorkLeadType(data) {
+    const response = await api.post('/api/work-lead-types', data)
+    return response.data
+  },
+
+  async updateWorkLeadType(id, data) {
+    const response = await api.put(`/api/work-lead-types/${id}`, data)
+    return response.data
+  },
+
+  async deleteWorkLeadType(id) {
+    await api.delete(`/api/work-lead-types/${id}`)
+  },
+
+  async restoreWorkLeadType(id) {
+    const response = await api.post(`/api/work-lead-types/${id}/restore`)
+    return response.data
   }
 }

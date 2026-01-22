@@ -118,8 +118,11 @@ export function AuthProvider({ children }) {
     setActiveProfile(null)
   }
 
-  // Verifier si le profil actif est admin (type_profile_id = 1)
+  // Verifier le type de profil actif
   const isAdmin = activeProfile?.type_profile_id === 1
+  const isSuperCoach = activeProfile?.type_profile_id === 2
+  const isCoach = activeProfile?.type_profile_id === 3
+  const isNavigant = activeProfile?.type_profile_id === 4
 
   const value = {
     user,
@@ -131,6 +134,9 @@ export function AuthProvider({ children }) {
     logout,
     isAuthenticated: !!session,
     isAdmin,
+    isSuperCoach,
+    isCoach,
+    isNavigant,
   }
 
   return (
