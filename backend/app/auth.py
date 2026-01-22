@@ -28,7 +28,7 @@ class CurrentUser:
         email: str,
         first_name: Optional[str] = None,
         last_name: Optional[str] = None,
-        active_profile_id: Optional[int] = None
+        active_profile_id: Optional[str] = None  # UUID
     ):
         self.id = id
         self.email = email
@@ -74,7 +74,7 @@ async def get_current_user(
             try:
                 profile_response = supabase_admin.table("profile")\
                     .select("id")\
-                    .eq("id_user", user.id)\
+                    .eq("user_uid", user.id)\
                     .limit(1)\
                     .execute()
 
@@ -103,14 +103,14 @@ async def get_current_user(
 
 async def get_current_profile_id(
     user: CurrentUser = Depends(get_current_user)
-) -> int:
+) -> str:
     """
     Recupere le profile_id actif de l'utilisateur connecte.
     Leve une erreur 403 si l'utilisateur n'a pas de profile.
 
     Example:
         @router.get("/data")
-        async def get_data(profile_id: int = Depends(get_current_profile_id)):
+        async def get_data(profile_id: str = Depends(get_current_profile_id)):
             return db.query().filter(profile_id=profile_id)
     """
     if not user.active_profile_id:
@@ -122,12 +122,12 @@ async def get_current_profile_id(
 
 
 # ID du type de profil admin
-ADMIN_PROFIL_ID = 1
+ADMIN_PROFILE_ID = 1
 
 
 async def require_admin(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
     """
-    Verifie que l'utilisateur connecte est un admin (id_type_profil = 1).
+    Verifie que l'utilisateur connecte est un admin (type_profile_id = 1).
     Leve une erreur 403 si ce n'est pas le cas.
 
     Example:
@@ -144,7 +144,7 @@ async def require_admin(user: CurrentUser = Depends(get_current_user)) -> Curren
 
     try:
         profile_response = supabase_admin.table("profile")\
-            .select("id_type_profil")\
+            .select("type_profile_id")\
             .eq("id", user.active_profile_id)\
             .execute()
 
@@ -154,9 +154,9 @@ async def require_admin(user: CurrentUser = Depends(get_current_user)) -> Curren
                 detail="Acces refuse: profil non trouve"
             )
 
-        id_type_profil = profile_response.data[0].get("id_type_profil")
+        type_profile_id = profile_response.data[0].get("type_profile_id")
 
-        if id_type_profil != ADMIN_PROFIL_ID:
+        if type_profile_id != ADMIN_PROFILE_ID:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Acces refuse: droits admin requis"

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth, admin, profile, type_profil
+from app.routers import auth, admin, profile, type_profile
 
 app = FastAPI(
     title="Starter API",
@@ -14,6 +14,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "http://192.168.1.151:3000",  # Accès réseau local
         # Ajouter votre domaine Vercel ici
         # "https://your-app.vercel.app",
     ],
@@ -32,7 +33,7 @@ app.include_router(admin.router)
 
 # Routers - Profils
 app.include_router(profile.router)
-app.include_router(type_profil.router)
+app.include_router(type_profile.router)
 
 # TODO: Ajouter vos routers metier ici
 # from app.routers import your_router

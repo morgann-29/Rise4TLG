@@ -10,8 +10,8 @@ import string
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
-# Nom du type de profil admin (a adapter selon vos donnees)
-ADMIN_PROFIL_NAME = "admin"
+# ID du type de profil admin
+ADMIN_PROFILE_ID = 1
 
 
 async def require_admin(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
@@ -28,7 +28,7 @@ async def require_admin(user: CurrentUser = Depends(get_current_user)) -> Curren
     try:
         # Recuperer le type de profil de l'utilisateur
         profile_response = supabase_admin.table("profile")\
-            .select("id_type_profil, type_profil(nom_profil)")\
+            .select("type_profile_id")\
             .eq("id", user.active_profile_id)\
             .execute()
 
@@ -39,9 +39,9 @@ async def require_admin(user: CurrentUser = Depends(get_current_user)) -> Curren
             )
 
         profile = profile_response.data[0]
-        type_profil = profile.get("type_profil")
+        type_profile_id = profile.get("type_profile_id")
 
-        if not type_profil or type_profil.get("nom_profil", "").lower() != ADMIN_PROFIL_NAME:
+        if type_profile_id != ADMIN_PROFILE_ID:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Acces refuse: droits admin requis"
@@ -83,18 +83,18 @@ async def list_users(admin: CurrentUser = Depends(require_admin)):
 
             # Recuperer les profils de cet utilisateur
             profiles_response = supabase_admin.table("profile")\
-                .select("id, id_user, id_type_profil, created_at, type_profil(nom_profil)")\
-                .eq("id_user", auth_user.id)\
+                .select("id, user_uid, type_profile_id, created_at, type_profile(name)")\
+                .eq("user_uid", auth_user.id)\
                 .execute()
 
             profiles = []
             for p in profiles_response.data:
-                type_profil = p.pop("type_profil", None)
+                type_profile = p.pop("type_profile", None)
                 profiles.append(ProfileBasic(
                     id=p["id"],
-                    id_user=p["id_user"],
-                    id_type_profil=p.get("id_type_profil"),
-                    type_profil_name=type_profil.get("nom_profil") if type_profil else None,
+                    user_uid=p["user_uid"],
+                    type_profile_id=p.get("type_profile_id"),
+                    type_profile_name=type_profile.get("name") if type_profile else None,
                     created_at=p.get("created_at")
                 ))
 
@@ -197,18 +197,18 @@ async def get_user(
 
         # Recuperer les profils
         profiles_response = supabase_admin.table("profile")\
-            .select("id, id_user, id_type_profil, created_at, type_profil(nom_profil)")\
-            .eq("id_user", user_id)\
+            .select("id, user_uid, type_profile_id, created_at, type_profile(name)")\
+            .eq("user_uid", user_id)\
             .execute()
 
         profiles = []
         for p in profiles_response.data:
-            type_profil = p.pop("type_profil", None)
+            type_profile = p.pop("type_profile", None)
             profiles.append(ProfileBasic(
                 id=p["id"],
-                id_user=p["id_user"],
-                id_type_profil=p.get("id_type_profil"),
-                type_profil_name=type_profil.get("nom_profil") if type_profil else None,
+                user_uid=p["user_uid"],
+                type_profile_id=p.get("type_profile_id"),
+                type_profile_name=type_profile.get("name") if type_profile else None,
                 created_at=p.get("created_at")
             ))
 
@@ -354,21 +354,21 @@ async def list_profiles(
     """
     try:
         query = supabase_admin.table("profile")\
-            .select("id, id_user, id_type_profil, created_at, type_profil(nom_profil)")
+            .select("id, user_uid, type_profile_id, created_at, type_profile(name)")
 
         if user_id:
-            query = query.eq("id_user", user_id)
+            query = query.eq("user_uid", user_id)
 
         response = query.order("created_at", desc=True).execute()
 
         profiles = []
         for p in response.data:
-            type_profil = p.pop("type_profil", None)
+            type_profile = p.pop("type_profile", None)
             profiles.append(ProfileBasic(
                 id=p["id"],
-                id_user=p["id_user"],
-                id_type_profil=p.get("id_type_profil"),
-                type_profil_name=type_profil.get("nom_profil") if type_profil else None,
+                user_uid=p["user_uid"],
+                type_profile_id=p.get("type_profile_id"),
+                type_profile_name=type_profile.get("name") if type_profile else None,
                 created_at=p.get("created_at")
             ))
 
@@ -394,7 +394,7 @@ async def create_profile(
     try:
         # Verifier que l'utilisateur existe
         try:
-            auth_user = supabase_admin.auth.admin.get_user_by_id(profile_data.id_user)
+            auth_user = supabase_admin.auth.admin.get_user_by_id(profile_data.user_uid)
             if not auth_user.user:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -409,9 +409,9 @@ async def create_profile(
             )
 
         # Creer le profil
-        insert_data = {"id_user": profile_data.id_user}
-        if profile_data.id_type_profil:
-            insert_data["id_type_profil"] = profile_data.id_type_profil
+        insert_data = {"user_uid": profile_data.user_uid}
+        if profile_data.type_profile_id:
+            insert_data["type_profile_id"] = profile_data.type_profile_id
 
         response = supabase_admin.table("profile")\
             .insert(insert_data)\
@@ -426,23 +426,23 @@ async def create_profile(
         profile = response.data[0]
 
         # Recuperer le nom du type de profil
-        type_profil_name = None
-        if profile_data.id_type_profil:
+        type_profile_name = None
+        if profile_data.type_profile_id:
             try:
-                type_response = supabase_admin.table("type_profil")\
-                    .select("nom_profil")\
-                    .eq("id", profile_data.id_type_profil)\
+                type_response = supabase_admin.table("type_profile")\
+                    .select("name")\
+                    .eq("id", profile_data.type_profile_id)\
                     .execute()
                 if type_response.data:
-                    type_profil_name = type_response.data[0].get("nom_profil")
+                    type_profile_name = type_response.data[0].get("name")
             except:
                 pass
 
         return ProfileBasic(
             id=profile["id"],
-            id_user=profile["id_user"],
-            id_type_profil=profile.get("id_type_profil"),
-            type_profil_name=type_profil_name,
+            user_uid=profile["user_uid"],
+            type_profile_id=profile.get("type_profile_id"),
+            type_profile_name=type_profile_name,
             created_at=profile.get("created_at")
         )
 
@@ -462,7 +462,7 @@ async def create_profile(
 
 @router.get("/profiles/{profile_id}", response_model=ProfileBasic)
 async def get_profile(
-    profile_id: int,
+    profile_id: str,  # UUID
     admin: CurrentUser = Depends(require_admin)
 ):
     """
@@ -471,7 +471,7 @@ async def get_profile(
     """
     try:
         response = supabase_admin.table("profile")\
-            .select("id, id_user, id_type_profil, created_at, type_profil(nom_profil)")\
+            .select("id, user_uid, type_profile_id, created_at, type_profile(name)")\
             .eq("id", profile_id)\
             .execute()
 
@@ -482,13 +482,13 @@ async def get_profile(
             )
 
         p = response.data[0]
-        type_profil = p.pop("type_profil", None)
+        type_profile = p.pop("type_profile", None)
 
         return ProfileBasic(
             id=p["id"],
-            id_user=p["id_user"],
-            id_type_profil=p.get("id_type_profil"),
-            type_profil_name=type_profil.get("nom_profil") if type_profil else None,
+            user_uid=p["user_uid"],
+            type_profile_id=p.get("type_profile_id"),
+            type_profile_name=type_profile.get("name") if type_profile else None,
             created_at=p.get("created_at")
         )
 
@@ -503,7 +503,7 @@ async def get_profile(
 
 @router.put("/profiles/{profile_id}", response_model=ProfileBasic)
 async def update_profile(
-    profile_id: int,
+    profile_id: str,  # UUID
     profile_data: ProfileUpdate,
     admin: CurrentUser = Depends(require_admin)
 ):
@@ -549,7 +549,7 @@ async def update_profile(
 
 @router.delete("/profiles/{profile_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_profile(
-    profile_id: int,
+    profile_id: str,  # UUID
     admin: CurrentUser = Depends(require_admin)
 ):
     """
@@ -559,7 +559,7 @@ async def delete_profile(
     try:
         # Verifier que ce n'est pas le dernier profil de l'utilisateur
         profile_response = supabase_admin.table("profile")\
-            .select("id_user")\
+            .select("user_uid")\
             .eq("id", profile_id)\
             .execute()
 
@@ -569,12 +569,12 @@ async def delete_profile(
                 detail="Profil non trouve"
             )
 
-        user_id = profile_response.data[0]["id_user"]
+        user_uid = profile_response.data[0]["user_uid"]
 
         # Compter les profils de l'utilisateur
         count_response = supabase_admin.table("profile")\
             .select("id")\
-            .eq("id_user", user_id)\
+            .eq("user_uid", user_uid)\
             .execute()
 
         if len(count_response.data) <= 1:

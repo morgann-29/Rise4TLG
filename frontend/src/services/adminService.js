@@ -79,8 +79,8 @@ export const adminService = {
   // ============================================
 
   // Liste les types de profil disponibles
-  async getTypeProfils() {
-    const response = await api.get('/api/type-profils')
+  async getTypeProfiles() {
+    const response = await api.get('/api/type-profiles')
     return response.data
   }
 }

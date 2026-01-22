@@ -1,20 +1,20 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from typing import List
-from app.models.type_profil import TypeProfil, TypeProfilCreate, TypeProfilUpdate
+from app.models.type_profile import TypeProfile, TypeProfileCreate, TypeProfileUpdate
 from app.auth import get_current_user, require_admin, CurrentUser, supabase_admin
 
-router = APIRouter(prefix="/api/type-profils", tags=["type-profils"])
+router = APIRouter(prefix="/api/type-profiles", tags=["type-profiles"])
 
 
-@router.get("/", response_model=List[TypeProfil])
-async def list_type_profils(
+@router.get("/", response_model=List[TypeProfile])
+async def list_type_profiles(
     user: CurrentUser = Depends(get_current_user)
 ):
     """Liste tous les types de profil"""
     try:
-        response = supabase_admin.table("type_profil")\
+        response = supabase_admin.table("type_profile")\
             .select("*")\
-            .order("nom_profil")\
+            .order("name")\
             .execute()
         return response.data
     except Exception as e:
@@ -24,16 +24,16 @@ async def list_type_profils(
         )
 
 
-@router.get("/{type_profil_id}", response_model=TypeProfil)
-async def get_type_profil(
-    type_profil_id: int,
+@router.get("/{type_profile_id}", response_model=TypeProfile)
+async def get_type_profile(
+    type_profile_id: int,
     user: CurrentUser = Depends(get_current_user)
 ):
     """Recuperer un type de profil par ID"""
     try:
-        response = supabase_admin.table("type_profil")\
+        response = supabase_admin.table("type_profile")\
             .select("*")\
-            .eq("id", type_profil_id)\
+            .eq("id", type_profile_id)\
             .execute()
 
         if not response.data:
@@ -51,15 +51,15 @@ async def get_type_profil(
         )
 
 
-@router.post("/", response_model=TypeProfil, status_code=status.HTTP_201_CREATED)
-async def create_type_profil(
-    type_profil_data: TypeProfilCreate,
+@router.post("/", response_model=TypeProfile, status_code=status.HTTP_201_CREATED)
+async def create_type_profile(
+    type_profile_data: TypeProfileCreate,
     admin: CurrentUser = Depends(require_admin)
 ):
     """Creer un nouveau type de profil (admin uniquement)"""
     try:
-        response = supabase_admin.table("type_profil")\
-            .insert(type_profil_data.model_dump())\
+        response = supabase_admin.table("type_profile")\
+            .insert(type_profile_data.model_dump())\
             .execute()
 
         if not response.data:
@@ -77,15 +77,15 @@ async def create_type_profil(
         )
 
 
-@router.put("/{type_profil_id}", response_model=TypeProfil)
-async def update_type_profil(
-    type_profil_id: int,
-    type_profil_data: TypeProfilUpdate,
+@router.put("/{type_profile_id}", response_model=TypeProfile)
+async def update_type_profile(
+    type_profile_id: int,
+    type_profile_data: TypeProfileUpdate,
     admin: CurrentUser = Depends(require_admin)
 ):
     """Mettre a jour un type de profil (admin uniquement)"""
     try:
-        update_data = {k: v for k, v in type_profil_data.model_dump().items() if v is not None}
+        update_data = {k: v for k, v in type_profile_data.model_dump().items() if v is not None}
 
         if not update_data:
             raise HTTPException(
@@ -93,9 +93,9 @@ async def update_type_profil(
                 detail="Aucune donnee a mettre a jour"
             )
 
-        response = supabase_admin.table("type_profil")\
+        response = supabase_admin.table("type_profile")\
             .update(update_data)\
-            .eq("id", type_profil_id)\
+            .eq("id", type_profile_id)\
             .execute()
 
         if not response.data:
@@ -113,16 +113,16 @@ async def update_type_profil(
         )
 
 
-@router.delete("/{type_profil_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_type_profil(
-    type_profil_id: int,
+@router.delete("/{type_profile_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_type_profile(
+    type_profile_id: int,
     admin: CurrentUser = Depends(require_admin)
 ):
     """Supprimer un type de profil (admin uniquement)"""
     try:
-        response = supabase_admin.table("type_profil")\
+        response = supabase_admin.table("type_profile")\
             .delete()\
-            .eq("id", type_profil_id)\
+            .eq("id", type_profile_id)\
             .execute()
 
         if not response.data:

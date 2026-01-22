@@ -10,21 +10,21 @@ function Users() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [selectedUser, setSelectedUser] = useState(null)
-  const [typeProfils, setTypeProfils] = useState([])
+  const [typeProfiles, setTypeProfiles] = useState([])
   const [formData, setFormData] = useState({
     email: '',
     first_name: '',
     last_name: ''
   })
   const [profileFormData, setProfileFormData] = useState({
-    id_type_profil: ''
+    type_profile_id: ''
   })
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError] = useState(null)
 
   useEffect(() => {
     loadUsers()
-    loadTypeProfils()
+    loadTypeProfiles()
   }, [])
 
   const loadUsers = async () => {
@@ -41,10 +41,10 @@ function Users() {
     }
   }
 
-  const loadTypeProfils = async () => {
+  const loadTypeProfiles = async () => {
     try {
-      const data = await adminService.getTypeProfils()
-      setTypeProfils(data || [])
+      const data = await adminService.getTypeProfiles()
+      setTypeProfiles(data || [])
     } catch (err) {
       console.error('Erreur chargement types profil:', err)
     }
@@ -107,16 +107,16 @@ function Users() {
 
   const handleAddProfile = async (e) => {
     e.preventDefault()
-    if (!selectedUser || !profileFormData.id_type_profil) return
+    if (!selectedUser || !profileFormData.type_profile_id) return
     setActionLoading(true)
     setActionError(null)
     try {
       await adminService.createProfile({
-        id_user: selectedUser.id,
-        id_type_profil: parseInt(profileFormData.id_type_profil)
+        user_uid: selectedUser.id,
+        type_profile_id: parseInt(profileFormData.type_profile_id)
       })
       setShowProfileModal(false)
-      setProfileFormData({ id_type_profil: '' })
+      setProfileFormData({ type_profile_id: '' })
       await loadUsers()
     } catch (err) {
       setActionError(err.response?.data?.detail || 'Erreur lors de l\'ajout du profil')
@@ -148,7 +148,7 @@ function Users() {
 
   const openProfileModal = (user) => {
     setSelectedUser(user)
-    setProfileFormData({ id_type_profil: '' })
+    setProfileFormData({ type_profile_id: '' })
     setActionError(null)
     setShowProfileModal(true)
   }
@@ -234,7 +234,7 @@ function Users() {
                           key={profile.id}
                           className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
                         >
-                          {profile.type_profil_name || `Profil ${profile.id}`}
+                          {profile.type_profile_name || `Profil ${profile.id}`}
                           <button
                             onClick={() => handleDeleteProfile(profile.id)}
                             className="ml-1 text-blue-600 dark:text-blue-300 hover:text-red-600 dark:hover:text-red-400"
@@ -470,14 +470,14 @@ function Users() {
                   </label>
                   <select
                     required
-                    value={profileFormData.id_type_profil}
-                    onChange={(e) => setProfileFormData({ id_type_profil: e.target.value })}
+                    value={profileFormData.type_profile_id}
+                    onChange={(e) => setProfileFormData({ type_profile_id: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">Selectionner...</option>
-                    {typeProfils.map((tp) => (
+                    {typeProfiles.map((tp) => (
                       <option key={tp.id} value={tp.id}>
-                        {tp.nom_profil}
+                        {tp.name}
                       </option>
                     ))}
                   </select>

@@ -58,29 +58,29 @@ class UserListResponse(BaseModel):
 # ============================================
 class ProfileCreate(BaseModel):
     """Creation d'un profil pour un utilisateur"""
-    id_user: str
-    id_type_profil: Optional[int] = None
+    user_uid: str
+    type_profile_id: Optional[int] = None
 
     class Config:
         json_schema_extra = {
             "example": {
-                "id_user": "uuid-user-id",
-                "id_type_profil": 1
+                "user_uid": "uuid-user-id",
+                "type_profile_id": 1
             }
         }
 
 
 class ProfileUpdate(BaseModel):
     """Mise a jour d'un profil"""
-    id_type_profil: Optional[int] = None
+    type_profile_id: Optional[int] = None
 
 
 class ProfileBasic(BaseModel):
     """Profil basique"""
-    id: int
-    id_user: str
-    id_type_profil: Optional[int] = None
-    type_profil_name: Optional[str] = None
+    id: str  # UUID
+    user_uid: str
+    type_profile_id: Optional[int] = None
+    type_profile_name: Optional[str] = None
     created_at: Optional[datetime] = None
 
 

@@ -118,8 +118,8 @@ export function AuthProvider({ children }) {
     setActiveProfile(null)
   }
 
-  // Verifier si le profil actif est admin (id_type_profil = 1)
-  const isAdmin = activeProfile?.id_type_profil === 1
+  // Verifier si le profil actif est admin (type_profile_id = 1)
+  const isAdmin = activeProfile?.type_profile_id === 1
 
   const value = {
     user,

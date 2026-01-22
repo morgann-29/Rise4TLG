@@ -3,19 +3,19 @@ from typing import Optional
 from datetime import datetime
 
 
-class TypeProfilBase(BaseModel):
-    nom_profil: str
+class TypeProfileBase(BaseModel):
+    name: str
 
 
-class TypeProfilCreate(TypeProfilBase):
+class TypeProfileCreate(TypeProfileBase):
     pass
 
 
-class TypeProfilUpdate(BaseModel):
-    nom_profil: Optional[str] = None
+class TypeProfileUpdate(BaseModel):
+    name: Optional[str] = None
 
 
-class TypeProfil(TypeProfilBase):
+class TypeProfile(TypeProfileBase):
     id: int
     created_at: datetime
     updated_at: datetime

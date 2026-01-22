@@ -45,7 +45,7 @@ function Layout({ children }) {
   }
 
   // Profil actuel depuis le backend
-  const currentProfileName = activeProfile?.type_profil_name || 'Chargement...'
+  const currentProfileName = activeProfile?.type_profile_name || 'Chargement...'
 
   // Autres profils disponibles (exclure le profil actif)
   const otherProfiles = profiles.filter(p => p.id !== activeProfile?.id)
@@ -160,7 +160,7 @@ function Layout({ children }) {
                             className="block w-full text-left px-2 py-1 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
                             onClick={() => handleSwitchProfile(profile.id)}
                           >
-                            {profile.type_profil_name || `Profil ${profile.id}`}
+                            {profile.type_profile_name || `Profil ${profile.id}`}
                           </button>
                         ))}
                       </div>
