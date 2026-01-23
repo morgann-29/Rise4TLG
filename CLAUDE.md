@@ -14,7 +14,7 @@
 backend/
   app/
     main.py          # Point d'entree FastAPI
-    auth.py          # Helpers auth (get_current_user, require_admin, require_super_coach)
+    auth.py          # Helpers auth (get_current_user, require_admin, require_super_coach, require_coach)
     config.py        # Settings (SUPABASE_URL, clés)
     models/          # Pydantic schemas
       file.py        # Files et références
@@ -34,11 +34,13 @@ backend/
       work_lead_type.py # CRUD types axes
       work_lead_master.py # CRUD modèles axes
       session_master.py # CRUD modèles séances
+      coach.py       # API Coach (groupes, sessions, work leads)
 frontend/
   src/
     components/
       AdminLayout.js      # Layout admin
       SuperCoachLayout.js # Layout super coach
+      CoachLayout.js      # Layout coach (menus dynamiques par groupe)
       FileManager/        # Gestion upload/liste fichiers
       RichTextEditor/     # Editeur TipTap avec médias
       shared/             # Composants partagés (ConfirmModal)
@@ -51,6 +53,11 @@ frontend/
       Groups.js, GroupDetails.js
       WorkLeadMasterModels.js, WorkLeadMasterDetail.js
       SessionMasterModels.js, SessionMasterDetail.js
+      # Coach (dans pages/coach/)
+      CoachDashboard.js, GroupProgrammation.js
+      GroupSessions.js, GroupSessionDetail.js
+      GroupWorkLeads.js, GroupWorkLeadDetail.js
+      GroupProjects.js
     services/
       api.js              # Config Axios
       adminService.js     # API admin
@@ -59,8 +66,10 @@ frontend/
       projectService.js   # API projets
       workLeadMasterService.js # API modèles axes
       sessionMasterService.js # API modèles séances
+      coachService.js    # API coach (groupes, sessions, work leads)
 database/
   schema.sql         # Schema PostgreSQL complet avec RLS
+  migrations/        # Scripts de migration SQL
 ```
 
 ## Modele de données (relations clés)
@@ -117,8 +126,9 @@ files_reference (partage de fichiers entre entités)
 - **Frontend**: camelCase (JS), mais les données API restent en snake_case
 - **Tables ref**: `type_*` avec INTEGER id auto-increment
 - **Tables metier**: UUID pour les id
-- **Soft delete**: champ `deleted_at` (nullable timestamp)
-- **Archivage**: champ `archived_at` pour work_lead_master
+- **Soft delete**: champ `is_deleted` (boolean, default false)
+- **Archivage**: champ `is_archived` (boolean) pour work_lead_master et work_lead
+- **Status work_lead**: enum nullable (TODO, WORKING, DANGER, OK) pour work_lead_master et work_lead
 
 ## Commandes
 
@@ -160,6 +170,19 @@ cd frontend && npm start
 - `POST /api/session-masters/models/{id}/restore` - Restaurer modèle séance
 - `GET /api/session-masters/type-seances` - Types de séances pour dropdown
 
+### Coach (type_profile_id = 3)
+- `GET /api/coach/groups` - Mes groupes (ceux où je suis assigné)
+- `GET /api/coach/groups/{id}` - Détails d'un groupe
+- `GET/POST/PUT/DELETE /api/coach/groups/{id}/sessions` - Sessions du groupe
+- `GET /api/coach/groups/{id}/sessions/{session_id}` - Détail session
+- `GET/POST/PUT/DELETE /api/coach/groups/{id}/work-leads` - Axes de travail du groupe
+- `GET /api/coach/groups/{id}/work-leads/{work_lead_id}` - Détail axe
+- `POST /api/coach/groups/{id}/work-leads/{work_lead_id}/archive` - Archiver axe
+- `POST /api/coach/groups/{id}/work-leads/{work_lead_id}/unarchive` - Désarchiver axe
+- `GET /api/coach/groups/{id}/projects` - Projets du groupe (lecture seule)
+- `GET /api/coach/type-seances` - Types de séances pour dropdown
+- `GET /api/coach/work-lead-types` - Types d'axes pour dropdown
+
 ### Fichiers (tous rôles avec permissions)
 - `POST /api/files/upload` - Upload fichier (multipart)
 - `GET /api/files/{entity_type}/{entity_id}` - Liste fichiers d'une entité
@@ -198,6 +221,7 @@ cd frontend && npm start
 ### Layouts
 - `AdminLayout` - Navigation admin (Users, Types référentiels)
 - `SuperCoachLayout` - Navigation super coach (Dashboard, Projects, Groups, Models)
+- `CoachLayout` - Navigation coach avec menus dynamiques par groupe assigné
 
 ## Routes Frontend
 
@@ -216,6 +240,13 @@ cd frontend && npm start
 /super-coach/work-lead-models/:id
 /super-coach/session-models
 /super-coach/session-models/:id
+/coach
+/coach/groups/:groupId/programmation
+/coach/groups/:groupId/sessions
+/coach/groups/:groupId/sessions/:sessionId
+/coach/groups/:groupId/work-leads
+/coach/groups/:groupId/work-leads/:workLeadId
+/coach/groups/:groupId/projects
 ```
 
 ## Notes techniques

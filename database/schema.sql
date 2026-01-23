@@ -323,6 +323,7 @@ CREATE TABLE IF NOT EXISTS work_lead_master (
     work_lead_type_id UUID NOT NULL REFERENCES work_lead_type(id) ON DELETE RESTRICT,
     name TEXT NOT NULL,
     content TEXT,
+    status TEXT CHECK (status IN ('TODO', 'WORKING', 'DANGER', 'OK')),  -- nullable enum
     is_archived BOOLEAN DEFAULT FALSE,
     is_deleted BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -332,6 +333,7 @@ CREATE TABLE IF NOT EXISTS work_lead_master (
 CREATE INDEX idx_work_lead_master_group_id ON work_lead_master(group_id);
 CREATE INDEX idx_work_lead_master_work_lead_type_id ON work_lead_master(work_lead_type_id);
 CREATE INDEX idx_work_lead_master_is_deleted ON work_lead_master(is_deleted) WHERE is_deleted = FALSE;
+CREATE INDEX idx_work_lead_master_status ON work_lead_master(status) WHERE status IS NOT NULL;
 
 CREATE TRIGGER update_work_lead_master_updated_at
     BEFORE UPDATE ON work_lead_master
@@ -346,6 +348,7 @@ CREATE TABLE IF NOT EXISTS work_lead (
     work_lead_type_id UUID NOT NULL REFERENCES work_lead_type(id) ON DELETE RESTRICT,
     name TEXT NOT NULL,
     content TEXT,
+    status TEXT CHECK (status IN ('TODO', 'WORKING', 'DANGER', 'OK')),  -- nullable enum
     is_archived BOOLEAN DEFAULT FALSE,
     is_deleted BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -356,6 +359,7 @@ CREATE INDEX idx_work_lead_project_id ON work_lead(project_id);
 CREATE INDEX idx_work_lead_work_lead_master_id ON work_lead(work_lead_master_id);
 CREATE INDEX idx_work_lead_work_lead_type_id ON work_lead(work_lead_type_id);
 CREATE INDEX idx_work_lead_is_deleted ON work_lead(is_deleted) WHERE is_deleted = FALSE;
+CREATE INDEX idx_work_lead_status ON work_lead(status) WHERE status IS NOT NULL;
 
 CREATE TRIGGER update_work_lead_updated_at
     BEFORE UPDATE ON work_lead
