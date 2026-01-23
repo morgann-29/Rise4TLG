@@ -17,6 +17,8 @@ import Groups from './pages/Groups'
 import GroupDetails from './pages/GroupDetails'
 import WorkLeadMasterModels from './pages/WorkLeadMasterModels'
 import WorkLeadMasterDetail from './pages/WorkLeadMasterDetail'
+import SessionMasterModels from './pages/SessionMasterModels'
+import SessionMasterDetail from './pages/SessionMasterDetail'
 
 // Helper pour obtenir la route par defaut selon le profil
 function getDefaultRoute(isAdmin, isSuperCoach) {
@@ -201,6 +203,24 @@ function App() {
             element={
               <SuperCoachRoute>
                 <WorkLeadMasterDetail />
+              </SuperCoachRoute>
+            }
+          />
+
+          <Route
+            path="/super-coach/session-models"
+            element={
+              <SuperCoachRoute>
+                <SessionMasterModels />
+              </SuperCoachRoute>
+            }
+          />
+
+          <Route
+            path="/super-coach/session-models/:id"
+            element={
+              <SuperCoachRoute>
+                <SessionMasterDetail />
               </SuperCoachRoute>
             }
           />

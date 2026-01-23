@@ -199,11 +199,12 @@ CREATE INDEX idx_group_project_project_id ON group_project(project_id);
 -- ============================================
 
 -- Session Master (session de groupe, créée par un Coach/Super Coach)
+-- profile_id = NULL et group_id = NULL pour les modèles/templates
 CREATE TABLE IF NOT EXISTS session_master (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name TEXT NOT NULL,
-    profile_id UUID NOT NULL REFERENCES profile(id) ON DELETE RESTRICT,  -- créateur
-    group_id UUID REFERENCES "group"(id) ON DELETE RESTRICT,  -- nullable pour sessions hors groupe
+    profile_id UUID REFERENCES profile(id) ON DELETE RESTRICT,  -- créateur (nullable pour templates)
+    group_id UUID REFERENCES "group"(id) ON DELETE RESTRICT,  -- nullable pour sessions hors groupe ou templates
     type_seance_id INTEGER NOT NULL REFERENCES type_seance(id) ON DELETE RESTRICT,
     coach_id UUID REFERENCES profile(id) ON DELETE SET NULL,  -- coach présent (peut être différent du créateur)
     date_start TIMESTAMP WITH TIME ZONE,  -- nullable pour séances "template"

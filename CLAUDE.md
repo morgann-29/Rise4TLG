@@ -24,6 +24,7 @@ backend/
       type_support.py # Types de support
       work_lead_type.py # Types d'axes de travail
       work_lead_master.py # Modèles d'axes de travail
+      session_master.py # Modèles de séances
     routers/         # Endpoints API
       file.py        # Upload, partage, suppression fichiers
       group.py       # CRUD groupes + gestion coachs/projets
@@ -32,6 +33,7 @@ backend/
       type_support.py # CRUD types support
       work_lead_type.py # CRUD types axes
       work_lead_master.py # CRUD modèles axes
+      session_master.py # CRUD modèles séances
 frontend/
   src/
     components/
@@ -48,6 +50,7 @@ frontend/
       SuperCoachDashboard.js, Projects.js, ProjectDetails.js
       Groups.js, GroupDetails.js
       WorkLeadMasterModels.js, WorkLeadMasterDetail.js
+      SessionMasterModels.js, SessionMasterDetail.js
     services/
       api.js              # Config Axios
       adminService.js     # API admin
@@ -55,6 +58,7 @@ frontend/
       groupService.js     # API groupes
       projectService.js   # API projets
       workLeadMasterService.js # API modèles axes
+      sessionMasterService.js # API modèles séances
 database/
   schema.sql         # Schema PostgreSQL complet avec RLS
 ```
@@ -95,6 +99,7 @@ files_reference (partage de fichiers entre entités)
 - Un projet appartient à un Navigant (type_profile_id = 4)
 - Les groupes contiennent des projets et des Coachs
 - Les work_lead_master sont des templates réutilisables pour les groupes
+- Les session_master avec profile_id=NULL et group_id=NULL sont des templates de séances
 - Les fichiers sont polymorphiques (attachables à project, group, session, etc.)
 
 ## Rôles et permissions
@@ -151,6 +156,9 @@ cd frontend && npm start
 - `GET/POST/PUT/DELETE /api/work-lead-masters/models` - Modèles axes de travail
 - `POST /api/work-lead-masters/models/{id}/archive` - Archiver modèle
 - `POST /api/work-lead-masters/models/{id}/unarchive` - Désarchiver
+- `GET/POST/PUT/DELETE /api/session-masters/models` - Modèles de séances
+- `POST /api/session-masters/models/{id}/restore` - Restaurer modèle séance
+- `GET /api/session-masters/type-seances` - Types de séances pour dropdown
 
 ### Fichiers (tous rôles avec permissions)
 - `POST /api/files/upload` - Upload fichier (multipart)
@@ -206,6 +214,8 @@ cd frontend && npm start
 /super-coach/groups/:id
 /super-coach/work-lead-models
 /super-coach/work-lead-models/:id
+/super-coach/session-models
+/super-coach/session-models/:id
 ```
 
 ## Notes techniques
