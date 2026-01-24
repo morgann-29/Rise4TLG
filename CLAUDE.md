@@ -172,7 +172,8 @@ cd frontend && npm start
 
 ### Coach (type_profile_id = 3)
 - `GET /api/coach/groups` - Mes groupes (ceux où je suis assigné)
-- `GET /api/coach/groups/{id}` - Détails d'un groupe
+- `GET /api/coach/groups/{id}/basic` - Infos de base groupe (leger, pour breadcrumb)
+- `GET /api/coach/groups/{id}` - Détails complets d'un groupe (avec projets)
 - `GET/POST/PUT/DELETE /api/coach/groups/{id}/sessions` - Sessions du groupe
 - `GET /api/coach/groups/{id}/sessions/{session_id}` - Détail session
 - `GET/POST/PUT/DELETE /api/coach/groups/{id}/work-leads` - Axes de travail du groupe
@@ -180,8 +181,10 @@ cd frontend && npm start
 - `POST /api/coach/groups/{id}/work-leads/{work_lead_id}/archive` - Archiver axe
 - `POST /api/coach/groups/{id}/work-leads/{work_lead_id}/unarchive` - Désarchiver axe
 - `GET /api/coach/groups/{id}/projects` - Projets du groupe (lecture seule)
+- `POST /api/coach/groups/{id}/work-leads/import` - Importer un modèle d'axe dans le groupe
 - `GET /api/coach/type-seances` - Types de séances pour dropdown
 - `GET /api/coach/work-lead-types` - Types d'axes pour dropdown
+- `GET /api/coach/work-lead-models` - Modèles d'axes disponibles pour import
 
 ### Fichiers (tous rôles avec permissions)
 - `POST /api/files/upload` - Upload fichier (multipart)

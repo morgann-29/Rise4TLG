@@ -168,6 +168,50 @@ async def list_my_groups(user: CurrentUser = Depends(require_coach)):
         )
 
 
+class GroupBasic(BaseModel):
+    id: str
+    name: str
+    type_support_name: Optional[str] = None
+
+
+@router.get("/groups/{group_id}/basic", response_model=GroupBasic)
+async def get_my_group_basic(group_id: str, user: CurrentUser = Depends(require_coach)):
+    """Recuperer les infos de base d'un groupe (leger)"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        response = supabase_admin.table("group")\
+            .select("id, name, type_support(name)")\
+            .eq("id", group_id)\
+            .eq("is_deleted", False)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Groupe non trouve"
+            )
+
+        g = response.data[0]
+        return GroupBasic(
+            id=g["id"],
+            name=g["name"],
+            type_support_name=g["type_support"]["name"] if g.get("type_support") else None
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
 @router.get("/groups/{group_id}", response_model=CoachGroupDetails)
 async def get_my_group(group_id: str, user: CurrentUser = Depends(require_coach)):
     """Recuperer les details d'un groupe"""
@@ -965,6 +1009,162 @@ async def list_work_lead_types(user: CurrentUser = Depends(require_coach)):
 
         return response.data
 
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+# ============================================
+# WORK LEAD MODELS (templates globaux pour import)
+# ============================================
+
+class WorkLeadModel(BaseModel):
+    id: str
+    name: str
+    work_lead_type_id: str
+    work_lead_type_name: Optional[str] = None
+    content: Optional[str] = None
+    status: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class WorkLeadImportRequest(BaseModel):
+    model_id: str
+
+
+@router.get("/work-lead-models", response_model=List[WorkLeadModel])
+async def list_work_lead_models(user: CurrentUser = Depends(require_coach)):
+    """Liste les modeles d'axes de travail disponibles pour import (group_id=NULL)"""
+    try:
+        response = supabase_admin.table("work_lead_master")\
+            .select("*, work_lead_type(name)")\
+            .is_("group_id", "null")\
+            .eq("is_deleted", False)\
+            .eq("is_archived", False)\
+            .order("name")\
+            .execute()
+
+        models = []
+        for m in response.data:
+            work_lead_type = m.get("work_lead_type")
+            models.append(WorkLeadModel(
+                id=m["id"],
+                name=m["name"],
+                work_lead_type_id=m["work_lead_type_id"],
+                work_lead_type_name=work_lead_type.get("name") if work_lead_type else None,
+                content=m.get("content"),
+                status=m.get("status"),
+                created_at=m["created_at"],
+                updated_at=m["updated_at"]
+            ))
+
+        return models
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.post("/groups/{group_id}/work-leads/import", response_model=GroupWorkLead, status_code=status.HTTP_201_CREATED)
+async def import_work_lead_model(
+    group_id: str,
+    data: WorkLeadImportRequest,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Importer un modele d'axe de travail dans le groupe"""
+    try:
+        # Verifier acces au groupe
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Recuperer le modele source
+        source = supabase_admin.table("work_lead_master")\
+            .select("*")\
+            .eq("id", data.model_id)\
+            .is_("group_id", "null")\
+            .eq("is_deleted", False)\
+            .eq("is_archived", False)\
+            .execute()
+
+        if not source.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Modele non trouve ou non disponible"
+            )
+
+        model = source.data[0]
+
+        # Creer la copie dans le groupe
+        insert_data = {
+            "name": model["name"],
+            "group_id": group_id,
+            "work_lead_type_id": model["work_lead_type_id"],
+            "content": model.get("content"),
+            "status": model.get("status")
+        }
+
+        response = supabase_admin.table("work_lead_master")\
+            .insert(insert_data)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Erreur lors de l'import"
+            )
+
+        new_work_lead_id = response.data[0]["id"]
+
+        # Recuperer les fichiers associes au modele source
+        files_response = supabase_admin.table("files")\
+            .select("id")\
+            .eq("origin_entity_type", "work_lead_master")\
+            .eq("origin_entity_id", data.model_id)\
+            .execute()
+
+        # Creer les references de fichiers pour le nouvel axe
+        if files_response.data:
+            for file_record in files_response.data:
+                supabase_admin.table("files_reference")\
+                    .insert({
+                        "files_id": file_record["id"],
+                        "entity_type": "work_lead_master",
+                        "entity_id": new_work_lead_id
+                    })\
+                    .execute()
+
+        # Recuperer l'axe cree avec jointure
+        work_lead = supabase_admin.table("work_lead_master")\
+            .select("*, work_lead_type(name)")\
+            .eq("id", new_work_lead_id)\
+            .execute()
+
+        w = work_lead.data[0]
+        work_lead_type = w.get("work_lead_type")
+
+        return GroupWorkLead(
+            id=w["id"],
+            name=w["name"],
+            work_lead_type_id=w["work_lead_type_id"],
+            work_lead_type_name=work_lead_type.get("name") if work_lead_type else None,
+            content=w.get("content"),
+            status=w.get("status"),
+            is_deleted=w.get("is_deleted", False),
+            is_archived=w.get("is_archived", False),
+            created_at=w["created_at"],
+            updated_at=w["updated_at"]
+        )
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

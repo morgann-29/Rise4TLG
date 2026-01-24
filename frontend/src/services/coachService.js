@@ -15,6 +15,11 @@ export const coachService = {
     return response.data
   },
 
+  async getGroupBasic(groupId) {
+    const response = await api.get(`/api/coach/groups/${groupId}/basic`)
+    return response.data
+  },
+
   // ============================================
   // SESSIONS (session_master du groupe)
   // ============================================
@@ -106,6 +111,22 @@ export const coachService = {
 
   async getWorkLeadTypes() {
     const response = await api.get('/api/coach/work-lead-types')
+    return response.data
+  },
+
+  // ============================================
+  // WORK LEAD MODELS (templates pour import)
+  // ============================================
+
+  async getWorkLeadModels() {
+    const response = await api.get('/api/coach/work-lead-models')
+    return response.data
+  },
+
+  async importWorkLeadModel(groupId, modelId) {
+    const response = await api.post(`/api/coach/groups/${groupId}/work-leads/import`, {
+      model_id: modelId
+    })
     return response.data
   }
 }
