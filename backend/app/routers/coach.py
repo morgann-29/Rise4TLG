@@ -25,6 +25,12 @@ class CoachGroupDetails(CoachGroup):
     projects: List[dict] = []
 
 
+class SessionProject(BaseModel):
+    id: str
+    name: str
+    navigant_name: Optional[str] = None
+
+
 class GroupSession(BaseModel):
     id: str
     name: str
@@ -35,6 +41,9 @@ class GroupSession(BaseModel):
     date_end: Optional[datetime] = None
     location: Optional[dict] = None
     content: Optional[str] = None
+    coach_id: Optional[str] = None
+    coach_name: Optional[str] = None
+    projects: List[SessionProject] = []
     is_deleted: bool = False
     created_at: datetime
     updated_at: datetime
@@ -105,6 +114,61 @@ async def _verify_coach_in_group(profile_id: str, group_id: str) -> bool:
         .eq("group_id", group_id)\
         .execute()
     return len(response.data) > 0
+
+
+def _get_coach_name(profile_id: Optional[str]) -> Optional[str]:
+    """Recupere le nom du coach depuis son profile_id"""
+    if not profile_id:
+        return None
+    try:
+        profile = supabase_admin.table("profile")\
+            .select("user_uid")\
+            .eq("id", profile_id)\
+            .execute()
+        if profile.data and profile.data[0].get("user_uid"):
+            user_info = _get_user_info(profile.data[0]["user_uid"])
+            if user_info.get("first_name") or user_info.get("last_name"):
+                return f"{user_info.get('first_name', '')} {user_info.get('last_name', '')}".strip()
+            return user_info.get("email")
+    except:
+        pass
+    return None
+
+
+def _get_session_projects(session_master_id: str) -> list:
+    """Recupere les projets lies a une session_master via la table session"""
+    try:
+        # Requete sur session pour trouver les projets participants
+        response = supabase_admin.table("session")\
+            .select("project_id, project(id, name, profile(user_uid))")\
+            .eq("session_master_id", session_master_id)\
+            .eq("is_deleted", False)\
+            .execute()
+
+        projects = []
+        seen_project_ids = set()
+        for item in response.data:
+            project = item.get("project")
+            project_id = item.get("project_id")
+            # Eviter les doublons (au cas ou)
+            if project and project_id not in seen_project_ids:
+                seen_project_ids.add(project_id)
+                navigant_name = None
+                profile = project.get("profile")
+                if profile and profile.get("user_uid"):
+                    user_info = _get_user_info(profile["user_uid"])
+                    if user_info.get("first_name") or user_info.get("last_name"):
+                        navigant_name = f"{user_info.get('first_name', '')} {user_info.get('last_name', '')}".strip()
+                    else:
+                        navigant_name = user_info.get("email")
+                projects.append({
+                    "id": project["id"],
+                    "name": project["name"],
+                    "navigant_name": navigant_name
+                })
+        return projects
+    except:
+        return []
 
 
 def _get_current_status_for_work_lead_master(work_lead_master_id: str) -> str:
@@ -441,14 +505,6 @@ async def create_group_session(
                 if project_id not in valid_project_ids:
                     continue  # Ignorer les projets non valides
 
-                # Creer l'entree pivot project_session_master
-                supabase_admin.table("project_session_master")\
-                    .insert({
-                        "project_id": project_id,
-                        "session_master_id": session_master_id
-                    })\
-                    .execute()
-
                 # Creer la session individuelle
                 session_insert = {
                     "name": data.name,
@@ -537,6 +593,12 @@ async def get_group_session(
         s = response.data[0]
         type_seance = s.get("type_seance")
 
+        # Recuperer le nom du coach
+        coach_name = _get_coach_name(s.get("coach_id"))
+
+        # Recuperer les projets lies
+        projects = _get_session_projects(s["id"])
+
         return GroupSession(
             id=s["id"],
             name=s["name"],
@@ -547,6 +609,9 @@ async def get_group_session(
             date_end=s.get("date_end"),
             location=s.get("location"),
             content=s.get("content"),
+            coach_id=s.get("coach_id"),
+            coach_name=coach_name,
+            projects=[SessionProject(**p) for p in projects],
             is_deleted=s.get("is_deleted", False),
             created_at=s["created_at"],
             updated_at=s["updated_at"]
@@ -1236,6 +1301,405 @@ async def import_work_lead_model(
             created_at=w["created_at"],
             updated_at=w["updated_at"]
         )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+# ============================================
+# GROUP COACHES (pour selection dans session)
+# ============================================
+
+class GroupCoach(BaseModel):
+    profile_id: str
+    name: Optional[str] = None
+    email: Optional[str] = None
+
+
+@router.get("/groups/{group_id}/coaches", response_model=List[GroupCoach])
+async def list_group_coaches(
+    group_id: str,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Liste les coachs du groupe"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Recuperer les profiles de type Coach (type_profile_id=3) lies au groupe
+        response = supabase_admin.table("group_profile")\
+            .select("profile_id, profile(user_uid, type_profile_id)")\
+            .eq("group_id", group_id)\
+            .execute()
+
+        coaches = []
+        for gp in response.data:
+            profile = gp.get("profile")
+            if profile and profile.get("type_profile_id") == 3:  # Coach
+                user_info = _get_user_info(profile["user_uid"]) if profile.get("user_uid") else {}
+                name = None
+                if user_info.get("first_name") or user_info.get("last_name"):
+                    name = f"{user_info.get('first_name', '')} {user_info.get('last_name', '')}".strip()
+                coaches.append(GroupCoach(
+                    profile_id=gp["profile_id"],
+                    name=name,
+                    email=user_info.get("email")
+                ))
+
+        return coaches
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+# ============================================
+# SESSION PARTICIPANTS & COACH UPDATE
+# ============================================
+
+class SessionParticipantsUpdate(BaseModel):
+    project_ids: List[str]
+    coach_id: Optional[str] = None
+
+
+@router.put("/groups/{group_id}/sessions/{session_id}/participants", response_model=GroupSession)
+async def update_session_participants(
+    group_id: str,
+    session_id: str,
+    data: SessionParticipantsUpdate,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Mettre a jour les participants (projets) et le coach d'une session"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Recuperer la session_master avec ses infos
+        session_master = supabase_admin.table("session_master")\
+            .select("*")\
+            .eq("id", session_id)\
+            .eq("group_id", group_id)\
+            .eq("is_deleted", False)\
+            .execute()
+
+        if not session_master.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Session non trouvee"
+            )
+
+        sm = session_master.data[0]
+
+        # Recuperer les projets valides du groupe avec leur profile_id
+        group_projects = supabase_admin.table("group_project")\
+            .select("project_id, project(profile_id)")\
+            .eq("group_id", group_id)\
+            .execute()
+        project_profiles = {}
+        for gp in group_projects.data:
+            project_profiles[gp["project_id"]] = gp["project"]["profile_id"] if gp.get("project") else None
+        valid_project_ids = set(project_profiles.keys())
+
+        # Filtrer les project_ids pour ne garder que les valides
+        filtered_project_ids = set(pid for pid in data.project_ids if pid in valid_project_ids)
+
+        # Recuperer les projets actuellement lies via la table session
+        current_sessions = supabase_admin.table("session")\
+            .select("id, project_id")\
+            .eq("session_master_id", session_id)\
+            .eq("is_deleted", False)\
+            .execute()
+        current_project_ids = {s["project_id"] for s in current_sessions.data}
+        # Map project_id -> session_id pour soft-delete
+        project_to_session = {s["project_id"]: s["id"] for s in current_sessions.data}
+
+        # Projets a ajouter et a retirer
+        to_add = filtered_project_ids - current_project_ids
+        to_remove = current_project_ids - filtered_project_ids
+
+        # Soft-delete les sessions des projets retires
+        for project_id in to_remove:
+            session_to_delete = project_to_session.get(project_id)
+            if session_to_delete:
+                supabase_admin.table("session")\
+                    .update({"is_deleted": True})\
+                    .eq("id", session_to_delete)\
+                    .execute()
+
+        # Creer les sessions pour les nouveaux projets
+        for project_id in to_add:
+            # Creer la session individuelle
+            session_insert = {
+                "name": sm["name"],
+                "project_id": project_id,
+                "session_master_id": session_id,
+                "type_seance_id": sm["type_seance_id"],
+                "date_start": sm.get("date_start"),
+                "date_end": sm.get("date_end"),
+                "location": sm.get("location")
+            }
+            session_response = supabase_admin.table("session")\
+                .insert(session_insert)\
+                .execute()
+
+            # Ajouter l'equipage initial (navigant du projet)
+            if session_response.data and project_profiles.get(project_id):
+                new_session_id = session_response.data[0]["id"]
+                profile_id = project_profiles[project_id]
+                supabase_admin.table("session_profile")\
+                    .insert({
+                        "session_id": new_session_id,
+                        "profile_id": profile_id
+                    })\
+                    .execute()
+
+        # Mettre a jour le coach_id
+        supabase_admin.table("session_master")\
+            .update({"coach_id": data.coach_id})\
+            .eq("id", session_id)\
+            .execute()
+
+        # Retourner la session mise a jour
+        return await get_group_session(group_id, session_id, user)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+# ============================================
+# SESSION DATES UPDATE
+# ============================================
+
+class SessionDatesUpdate(BaseModel):
+    date_start: Optional[datetime] = None
+    date_end: Optional[datetime] = None
+
+
+@router.put("/groups/{group_id}/sessions/{session_id}/dates", response_model=GroupSession)
+async def update_session_dates(
+    group_id: str,
+    session_id: str,
+    data: SessionDatesUpdate,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Mettre a jour les dates d'une session"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        update_data = {
+            "date_start": data.date_start.isoformat() if data.date_start else None,
+            "date_end": data.date_end.isoformat() if data.date_end else None
+        }
+
+        response = supabase_admin.table("session_master")\
+            .update(update_data)\
+            .eq("id", session_id)\
+            .eq("group_id", group_id)\
+            .eq("is_deleted", False)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Session non trouvee"
+            )
+
+        return await get_group_session(group_id, session_id, user)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+# ============================================
+# SESSION WORK LEAD MASTERS (thematiques)
+# ============================================
+
+class SessionWorkLeadMaster(BaseModel):
+    work_lead_master_id: str
+    work_lead_master_name: str
+    work_lead_type_id: str
+    work_lead_type_name: Optional[str] = None
+    status: str  # TODO, WORKING, DANGER, OK
+
+
+class SessionWorkLeadMasterUpdate(BaseModel):
+    work_lead_master_id: str
+    status: Optional[str] = None  # None = supprimer, sinon TODO/WORKING/DANGER/OK
+
+
+@router.get("/groups/{group_id}/sessions/{session_id}/work-lead-masters", response_model=List[SessionWorkLeadMaster])
+async def get_session_work_lead_masters(
+    group_id: str,
+    session_id: str,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Recuperer les work_lead_masters associes a une session avec leur statut"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Verifier que la session appartient au groupe
+        session_check = supabase_admin.table("session_master")\
+            .select("id")\
+            .eq("id", session_id)\
+            .eq("group_id", group_id)\
+            .execute()
+
+        if not session_check.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Session non trouvee"
+            )
+
+        # Recuperer les associations depuis la table pivot
+        response = supabase_admin.table("session_master_work_lead_master")\
+            .select("work_lead_master_id, status, work_lead_master(id, name, work_lead_type_id, work_lead_type(name))")\
+            .eq("session_master_id", session_id)\
+            .execute()
+
+        result = []
+        for item in response.data:
+            wlm = item.get("work_lead_master")
+            if wlm:
+                work_lead_type = wlm.get("work_lead_type")
+                result.append(SessionWorkLeadMaster(
+                    work_lead_master_id=item["work_lead_master_id"],
+                    work_lead_master_name=wlm["name"],
+                    work_lead_type_id=wlm["work_lead_type_id"],
+                    work_lead_type_name=work_lead_type.get("name") if work_lead_type else None,
+                    status=item["status"]
+                ))
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.put("/groups/{group_id}/sessions/{session_id}/work-lead-masters")
+async def update_session_work_lead_master(
+    group_id: str,
+    session_id: str,
+    data: SessionWorkLeadMasterUpdate,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Mettre a jour ou supprimer un work_lead_master pour une session"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Verifier que la session appartient au groupe
+        session_check = supabase_admin.table("session_master")\
+            .select("id")\
+            .eq("id", session_id)\
+            .eq("group_id", group_id)\
+            .execute()
+
+        if not session_check.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Session non trouvee"
+            )
+
+        # Verifier que le work_lead_master appartient au groupe
+        wlm_check = supabase_admin.table("work_lead_master")\
+            .select("id")\
+            .eq("id", data.work_lead_master_id)\
+            .eq("group_id", group_id)\
+            .eq("is_deleted", False)\
+            .execute()
+
+        if not wlm_check.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Axe de travail non trouve dans ce groupe"
+            )
+
+        if data.status is None:
+            # Supprimer l'association
+            supabase_admin.table("session_master_work_lead_master")\
+                .delete()\
+                .eq("session_master_id", session_id)\
+                .eq("work_lead_master_id", data.work_lead_master_id)\
+                .execute()
+            return {"message": "Association supprimee"}
+        else:
+            # Valider le status
+            if data.status not in ['TODO', 'WORKING', 'DANGER', 'OK']:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Status invalide. Valeurs acceptees: TODO, WORKING, DANGER, OK"
+                )
+
+            # Upsert: verifier si existe deja
+            existing = supabase_admin.table("session_master_work_lead_master")\
+                .select("session_master_id")\
+                .eq("session_master_id", session_id)\
+                .eq("work_lead_master_id", data.work_lead_master_id)\
+                .execute()
+
+            if existing.data:
+                # Update
+                supabase_admin.table("session_master_work_lead_master")\
+                    .update({
+                        "status": data.status,
+                        "profile_id": user.active_profile_id
+                    })\
+                    .eq("session_master_id", session_id)\
+                    .eq("work_lead_master_id", data.work_lead_master_id)\
+                    .execute()
+            else:
+                # Insert
+                supabase_admin.table("session_master_work_lead_master")\
+                    .insert({
+                        "session_master_id": session_id,
+                        "work_lead_master_id": data.work_lead_master_id,
+                        "status": data.status,
+                        "profile_id": user.active_profile_id
+                    })\
+                    .execute()
+
+            return {"message": "Association mise a jour", "status": data.status}
 
     except HTTPException:
         raise

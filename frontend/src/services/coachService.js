@@ -128,5 +128,51 @@ export const coachService = {
       model_id: modelId
     })
     return response.data
+  },
+
+  // ============================================
+  // GROUP COACHES
+  // ============================================
+
+  async getGroupCoaches(groupId) {
+    const response = await api.get(`/api/coach/groups/${groupId}/coaches`)
+    return response.data
+  },
+
+  // ============================================
+  // SESSION PARTICIPANTS & DATES
+  // ============================================
+
+  async updateSessionParticipants(groupId, sessionId, projectIds, coachId) {
+    const response = await api.put(`/api/coach/groups/${groupId}/sessions/${sessionId}/participants`, {
+      project_ids: projectIds,
+      coach_id: coachId
+    })
+    return response.data
+  },
+
+  async updateSessionDates(groupId, sessionId, dateStart, dateEnd) {
+    const response = await api.put(`/api/coach/groups/${groupId}/sessions/${sessionId}/dates`, {
+      date_start: dateStart,
+      date_end: dateEnd
+    })
+    return response.data
+  },
+
+  // ============================================
+  // SESSION WORK LEAD MASTERS (thematiques)
+  // ============================================
+
+  async getSessionWorkLeadMasters(groupId, sessionId) {
+    const response = await api.get(`/api/coach/groups/${groupId}/sessions/${sessionId}/work-lead-masters`)
+    return response.data
+  },
+
+  async updateSessionWorkLeadMaster(groupId, sessionId, workLeadMasterId, status) {
+    const response = await api.put(`/api/coach/groups/${groupId}/sessions/${sessionId}/work-lead-masters`, {
+      work_lead_master_id: workLeadMasterId,
+      status: status // null = supprimer, sinon TODO/WORKING/DANGER/OK
+    })
+    return response.data
   }
 }

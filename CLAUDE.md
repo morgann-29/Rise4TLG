@@ -179,6 +179,8 @@ cd frontend && npm start
 - `GET /api/coach/groups/{id}` - Détails complets d'un groupe (avec projets)
 - `GET/POST/PUT/DELETE /api/coach/groups/{id}/sessions` - Sessions du groupe
 - `GET /api/coach/groups/{id}/sessions/{session_id}` - Détail session
+- `GET /api/coach/groups/{id}/sessions/{session_id}/work-lead-masters` - Thématiques de la session
+- `PUT /api/coach/groups/{id}/sessions/{session_id}/work-lead-masters` - Associer/modifier thématique (status null = supprimer)
 - `GET/POST/PUT/DELETE /api/coach/groups/{id}/work-leads` - Axes de travail du groupe
 - `GET /api/coach/groups/{id}/work-leads/{work_lead_id}` - Détail axe
 - `POST /api/coach/groups/{id}/work-leads/{work_lead_id}/archive` - Archiver axe
