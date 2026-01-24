@@ -31,7 +31,7 @@ function GroupSessions() {
     try {
       setLoading(true)
       const [groupData, sessionsData, typesData] = await Promise.all([
-        coachService.getGroup(groupId),
+        coachService.getGroupBasic(groupId),
         coachService.getGroupSessions(groupId, showDeleted),
         coachService.getTypeSeances()
       ])

@@ -23,7 +23,7 @@ function GroupWorkLeadDetail() {
       setLoading(true)
       const [workLeadData, groupData] = await Promise.all([
         coachService.getGroupWorkLead(groupId, workLeadId),
-        coachService.getGroup(groupId)
+        coachService.getGroupBasic(groupId)
       ])
       setWorkLead(workLeadData)
       setGroup(groupData)

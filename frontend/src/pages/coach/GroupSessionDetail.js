@@ -23,7 +23,7 @@ function GroupSessionDetail() {
       setLoading(true)
       const [sessionData, groupData] = await Promise.all([
         coachService.getGroupSession(groupId, sessionId),
-        coachService.getGroup(groupId)
+        coachService.getGroupBasic(groupId)
       ])
       setSession(sessionData)
       setGroup(groupData)

@@ -15,7 +15,7 @@ function GroupProjects() {
       try {
         setLoading(true)
         const [groupData, projectsData] = await Promise.all([
-          coachService.getGroup(groupId),
+          coachService.getGroupBasic(groupId),
           coachService.getGroupProjects(groupId)
         ])
         setGroup(groupData)
