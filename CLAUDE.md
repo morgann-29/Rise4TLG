@@ -87,14 +87,16 @@ project -----> type_support           group_project (pivot)
     |
     +-----> work_lead -----> work_lead_type
     |
-    v (project_id)
-session -----> session_master (sessions de groupe)
-    |              |
-    v              v
-session_work_lead  session_master_work_lead_master
-    |                      |
-    v                      v
-work_lead           work_lead_master (modèles/templates)
+    +-----> project_session_master (pivot) -----> session_master (sessions de groupe)
+    |                                                  |
+    v (project_id)                                     v
+session -----> session_master              session_master_work_lead_master
+    |                                                  |
+    v                                                  v
+session_work_lead                           work_lead_master (modèles/templates)
+    |
+    v
+work_lead
 
 files (polymorphic: entity_type + entity_id)
     |
@@ -128,7 +130,7 @@ files_reference (partage de fichiers entre entités)
 - **Tables metier**: UUID pour les id
 - **Soft delete**: champ `is_deleted` (boolean, default false)
 - **Archivage**: champ `is_archived` (boolean) pour work_lead_master et work_lead
-- **Status work_lead**: enum nullable (TODO, WORKING, DANGER, OK) pour work_lead_master et work_lead
+- **Status work_lead**: le statut est stocké dans les tables pivots (`session_master_work_lead_master`, `session_work_lead`) avec enum (TODO, WORKING, DANGER, OK). Le `current_status` est calculé : pas d'entrée pivot = NEW, sinon = statut de l'entrée la plus récente
 
 ## Commandes
 

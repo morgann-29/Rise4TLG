@@ -5,6 +5,7 @@ import { coachService } from '../../services/coachService'
 
 // Status labels and colors
 const STATUS_CONFIG = {
+  NEW: { label: 'Nouveau', bgClass: 'bg-purple-100 dark:bg-purple-900', textClass: 'text-purple-800 dark:text-purple-200' },
   TODO: { label: 'A travailler', bgClass: 'bg-gray-100 dark:bg-gray-700', textClass: 'text-gray-800 dark:text-gray-200' },
   WORKING: { label: 'En cours', bgClass: 'bg-blue-100 dark:bg-blue-900', textClass: 'text-blue-800 dark:text-blue-200' },
   DANGER: { label: 'Danger', bgClass: 'bg-red-100 dark:bg-red-900', textClass: 'text-red-800 dark:text-red-200' },
@@ -345,9 +346,9 @@ function GroupWorkLeads() {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            {item.status ? (
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_CONFIG[item.status]?.bgClass || ''} ${STATUS_CONFIG[item.status]?.textClass || ''}`}>
-                                {STATUS_CONFIG[item.status]?.label || item.status}
+                            {item.current_status ? (
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_CONFIG[item.current_status]?.bgClass || ''} ${STATUS_CONFIG[item.current_status]?.textClass || ''}`}>
+                                {STATUS_CONFIG[item.current_status]?.label || item.current_status}
                               </span>
                             ) : (
                               <span className="text-gray-400 dark:text-gray-500">-</span>
@@ -547,9 +548,9 @@ function GroupWorkLeads() {
                         </div>
                         <div className="text-xs text-gray-500 dark:text-gray-400">
                           {model.work_lead_type_name || 'Sans type'}
-                          {model.status && (
-                            <span className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${STATUS_CONFIG[model.status]?.bgClass || ''} ${STATUS_CONFIG[model.status]?.textClass || ''}`}>
-                              {STATUS_CONFIG[model.status]?.label || model.status}
+                          {model.current_status && (
+                            <span className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${STATUS_CONFIG[model.current_status]?.bgClass || ''} ${STATUS_CONFIG[model.current_status]?.textClass || ''}`}>
+                              {STATUS_CONFIG[model.current_status]?.label || model.current_status}
                             </span>
                           )}
                         </div>

@@ -29,6 +29,7 @@ class WorkLeadMasterResponse(BaseModel):
     work_lead_type_name: Optional[str] = None
     name: str
     content: Optional[str] = None
+    current_status: str = "NEW"  # NEW, TODO, WORKING, DANGER, OK - derive de la table pivot
     is_archived: bool
     is_deleted: bool
     created_at: datetime

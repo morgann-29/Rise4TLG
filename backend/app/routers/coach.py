@@ -55,7 +55,7 @@ class GroupWorkLead(BaseModel):
     work_lead_type_id: str
     work_lead_type_name: Optional[str] = None
     content: Optional[str] = None
-    status: Optional[str] = None  # TODO, WORKING, DANGER, OK
+    current_status: str = "NEW"  # NEW, TODO, WORKING, DANGER, OK - derive de la table pivot
     is_deleted: bool = False
     is_archived: bool = False
     created_at: datetime
@@ -66,7 +66,6 @@ class GroupWorkLeadCreate(BaseModel):
     name: str
     work_lead_type_id: str
     content: Optional[str] = None
-    status: Optional[str] = None  # TODO, WORKING, DANGER, OK
 
 
 class GroupProject(BaseModel):
@@ -105,6 +104,27 @@ async def _verify_coach_in_group(profile_id: str, group_id: str) -> bool:
         .eq("group_id", group_id)\
         .execute()
     return len(response.data) > 0
+
+
+def _get_current_status_for_work_lead_master(work_lead_master_id: str) -> str:
+    """
+    Calcule le statut courant d'un work_lead_master depuis la table pivot.
+    - Pas d'entree dans session_master_work_lead_master => NEW
+    - Entrees existantes => statut de l'entree la plus recente (updated_at)
+    """
+    try:
+        response = supabase_admin.table("session_master_work_lead_master")\
+            .select("status, updated_at")\
+            .eq("work_lead_master_id", work_lead_master_id)\
+            .order("updated_at", desc=True)\
+            .limit(1)\
+            .execute()
+
+        if response.data and len(response.data) > 0:
+            return response.data[0]["status"]
+        return "NEW"
+    except:
+        return "NEW"
 
 
 # ============================================
@@ -609,7 +629,7 @@ async def list_group_work_leads(
                 work_lead_type_id=w["work_lead_type_id"],
                 work_lead_type_name=work_lead_type.get("name") if work_lead_type else None,
                 content=w.get("content"),
-                status=w.get("status"),
+                current_status=_get_current_status_for_work_lead_master(w["id"]),
                 is_deleted=w.get("is_deleted", False),
                 is_archived=w.get("is_archived", False),
                 created_at=w["created_at"],
@@ -658,8 +678,7 @@ async def create_group_work_lead(
             "name": data.name,
             "group_id": group_id,
             "work_lead_type_id": data.work_lead_type_id,
-            "content": data.content,
-            "status": data.status
+            "content": data.content
         }
 
         response = supabase_admin.table("work_lead_master")\
@@ -687,7 +706,7 @@ async def create_group_work_lead(
             work_lead_type_id=w["work_lead_type_id"],
             work_lead_type_name=work_lead_type.get("name") if work_lead_type else None,
             content=w.get("content"),
-            status=w.get("status"),
+            current_status="NEW",  # Nouveau = pas d'entree pivot = NEW
             is_deleted=w.get("is_deleted", False),
             is_archived=w.get("is_archived", False),
             created_at=w["created_at"],
@@ -738,7 +757,7 @@ async def get_group_work_lead(
             work_lead_type_id=w["work_lead_type_id"],
             work_lead_type_name=work_lead_type.get("name") if work_lead_type else None,
             content=w.get("content"),
-            status=w.get("status"),
+            current_status=_get_current_status_for_work_lead_master(w["id"]),
             is_deleted=w.get("is_deleted", False),
             is_archived=w.get("is_archived", False),
             created_at=w["created_at"],
@@ -772,8 +791,7 @@ async def update_group_work_lead(
         update_data = {
             "name": data.name,
             "work_lead_type_id": data.work_lead_type_id,
-            "content": data.content,
-            "status": data.status
+            "content": data.content
         }
 
         response = supabase_admin.table("work_lead_master")\
@@ -1026,7 +1044,7 @@ class WorkLeadModel(BaseModel):
     work_lead_type_id: str
     work_lead_type_name: Optional[str] = None
     content: Optional[str] = None
-    status: Optional[str] = None
+    current_status: str = "NEW"  # NEW, TODO, WORKING, DANGER, OK - derive de la table pivot
     created_at: datetime
     updated_at: datetime
 
@@ -1056,7 +1074,7 @@ async def list_work_lead_models(user: CurrentUser = Depends(require_coach)):
                 work_lead_type_id=m["work_lead_type_id"],
                 work_lead_type_name=work_lead_type.get("name") if work_lead_type else None,
                 content=m.get("content"),
-                status=m.get("status"),
+                current_status=_get_current_status_for_work_lead_master(m["id"]),
                 created_at=m["created_at"],
                 updated_at=m["updated_at"]
             ))
@@ -1107,8 +1125,7 @@ async def import_work_lead_model(
             "name": model["name"],
             "group_id": group_id,
             "work_lead_type_id": model["work_lead_type_id"],
-            "content": model.get("content"),
-            "status": model.get("status")
+            "content": model.get("content")
         }
 
         response = supabase_admin.table("work_lead_master")\
@@ -1156,7 +1173,7 @@ async def import_work_lead_model(
             work_lead_type_id=w["work_lead_type_id"],
             work_lead_type_name=work_lead_type.get("name") if work_lead_type else None,
             content=w.get("content"),
-            status=w.get("status"),
+            current_status="NEW",  # Import = nouveau = pas d'entree pivot = NEW
             is_deleted=w.get("is_deleted", False),
             is_archived=w.get("is_archived", False),
             created_at=w["created_at"],

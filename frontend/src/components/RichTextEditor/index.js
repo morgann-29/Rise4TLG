@@ -87,9 +87,21 @@ function useResolveFileUrls(htmlContent, entityType, entityId) {
         for (const path of paths) {
           const url = resolvedCacheRef.current.get(path)
           if (url) {
-            // Remplacer src tout en gardant data-file-path
-            const srcRegex = new RegExp(`src="[^"]*"(\\s+data-file-path="${path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}")`, 'g')
-            resolved = resolved.replace(srcRegex, `src="${url}"$1`)
+            const escapedPath = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            // Regex flexible: trouve les <img> avec ce data-file-path et remplace leur src
+            // Gere tout ordre d'attributs (src avant ou apres data-file-path)
+            const imgRegex = new RegExp(
+              `(<img\\s+[^>]*?)\\bsrc="[^"]*"([^>]*?\\bdata-file-path="${escapedPath}"[^>]*>)`,
+              'g'
+            )
+            resolved = resolved.replace(imgRegex, `$1src="${url}"$2`)
+
+            // Aussi gerer le cas inverse: data-file-path avant src
+            const imgRegexReverse = new RegExp(
+              `(<img\\s+[^>]*?\\bdata-file-path="${escapedPath}"[^>]*?)\\bsrc="[^"]*"([^>]*>)`,
+              'g'
+            )
+            resolved = resolved.replace(imgRegexReverse, `$1src="${url}"$2`)
           }
         }
 
@@ -219,19 +231,27 @@ function RichTextEditor({
     }
   })
 
-  // Synchroniser le contenu resolu avec l'editeur uniquement au premier chargement
+  // Synchroniser le contenu resolu avec l'editeur
   const hasInitializedRef = useRef(false)
   useEffect(() => {
-    if (editor && resolvedValue && !hasInitializedRef.current) {
-      // Seulement au premier chargement, pas pendant l'edition
-      const currentContent = editor.getHTML()
-      // Comparer sans les URLs (qui changent)
-      const normalizeForCompare = (html) => html.replace(/src="[^"]*"/g, 'src=""')
-      if (normalizeForCompare(currentContent) !== normalizeForCompare(resolvedValue)) {
+    if (!editor || !resolvedValue) return
+
+    const currentContent = editor.getHTML()
+    const normalizeForCompare = (html) => html.replace(/src="[^"]*"/g, 'src=""')
+    const currentNormalized = normalizeForCompare(currentContent)
+    const resolvedNormalized = normalizeForCompare(resolvedValue)
+
+    if (currentNormalized === resolvedNormalized) {
+      // Structure identique - mettre a jour si les URLs different (resolution)
+      if (currentContent !== resolvedValue) {
         editor.commands.setContent(resolvedValue, false)
       }
+    } else if (!hasInitializedRef.current) {
+      // Structure differente et pas encore initialise - premier chargement
+      editor.commands.setContent(resolvedValue, false)
       hasInitializedRef.current = true
     }
+    // Si structure differente et deja initialise, ne pas mettre a jour (edition en cours)
   }, [resolvedValue, editor])
 
   // Upload et insertion d'une image collee

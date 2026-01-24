@@ -194,6 +194,16 @@ CREATE TABLE IF NOT EXISTS group_project (
 
 CREATE INDEX idx_group_project_project_id ON group_project(project_id);
 
+-- Pivot: Projet <-> Session Master
+CREATE TABLE IF NOT EXISTS project_session_master (
+    project_id UUID NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    session_master_id UUID NOT NULL REFERENCES session_master(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    PRIMARY KEY (project_id, session_master_id)
+);
+
+CREATE INDEX idx_project_session_master_session_master_id ON project_session_master(session_master_id);
+
 -- ============================================
 -- SESSIONS
 -- ============================================
@@ -323,7 +333,6 @@ CREATE TABLE IF NOT EXISTS work_lead_master (
     work_lead_type_id UUID NOT NULL REFERENCES work_lead_type(id) ON DELETE RESTRICT,
     name TEXT NOT NULL,
     content TEXT,
-    status TEXT CHECK (status IN ('TODO', 'WORKING', 'DANGER', 'OK')),  -- nullable enum
     is_archived BOOLEAN DEFAULT FALSE,
     is_deleted BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -333,7 +342,6 @@ CREATE TABLE IF NOT EXISTS work_lead_master (
 CREATE INDEX idx_work_lead_master_group_id ON work_lead_master(group_id);
 CREATE INDEX idx_work_lead_master_work_lead_type_id ON work_lead_master(work_lead_type_id);
 CREATE INDEX idx_work_lead_master_is_deleted ON work_lead_master(is_deleted) WHERE is_deleted = FALSE;
-CREATE INDEX idx_work_lead_master_status ON work_lead_master(status) WHERE status IS NOT NULL;
 
 CREATE TRIGGER update_work_lead_master_updated_at
     BEFORE UPDATE ON work_lead_master
@@ -348,7 +356,6 @@ CREATE TABLE IF NOT EXISTS work_lead (
     work_lead_type_id UUID NOT NULL REFERENCES work_lead_type(id) ON DELETE RESTRICT,
     name TEXT NOT NULL,
     content TEXT,
-    status TEXT CHECK (status IN ('TODO', 'WORKING', 'DANGER', 'OK')),  -- nullable enum
     is_archived BOOLEAN DEFAULT FALSE,
     is_deleted BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -359,7 +366,6 @@ CREATE INDEX idx_work_lead_project_id ON work_lead(project_id);
 CREATE INDEX idx_work_lead_work_lead_master_id ON work_lead(work_lead_master_id);
 CREATE INDEX idx_work_lead_work_lead_type_id ON work_lead(work_lead_type_id);
 CREATE INDEX idx_work_lead_is_deleted ON work_lead(is_deleted) WHERE is_deleted = FALSE;
-CREATE INDEX idx_work_lead_status ON work_lead(status) WHERE status IS NOT NULL;
 
 CREATE TRIGGER update_work_lead_updated_at
     BEFORE UPDATE ON work_lead
@@ -370,7 +376,8 @@ CREATE TRIGGER update_work_lead_updated_at
 CREATE TABLE IF NOT EXISTS session_work_lead (
     session_id UUID NOT NULL REFERENCES session(id) ON DELETE CASCADE,
     work_lead_id UUID NOT NULL REFERENCES work_lead(id) ON DELETE CASCADE,
-    status TEXT NOT NULL CHECK (status IN ('todo', 'working', 'danger', 'validated')) DEFAULT 'todo',
+    status TEXT NOT NULL CHECK (status IN ('TODO', 'WORKING', 'DANGER', 'OK')),
+    profile_id UUID REFERENCES profile(id) ON DELETE SET NULL,  -- audit: qui a cree/modifie
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     PRIMARY KEY (session_id, work_lead_id)
@@ -378,6 +385,7 @@ CREATE TABLE IF NOT EXISTS session_work_lead (
 
 CREATE INDEX idx_session_work_lead_work_lead_id ON session_work_lead(work_lead_id);
 CREATE INDEX idx_session_work_lead_status ON session_work_lead(status);
+CREATE INDEX idx_session_work_lead_profile_id ON session_work_lead(profile_id);
 
 CREATE TRIGGER update_session_work_lead_updated_at
     BEFORE UPDATE ON session_work_lead
@@ -388,7 +396,8 @@ CREATE TRIGGER update_session_work_lead_updated_at
 CREATE TABLE IF NOT EXISTS session_master_work_lead_master (
     session_master_id UUID NOT NULL REFERENCES session_master(id) ON DELETE CASCADE,
     work_lead_master_id UUID NOT NULL REFERENCES work_lead_master(id) ON DELETE CASCADE,
-    status TEXT NOT NULL CHECK (status IN ('todo', 'working', 'danger', 'validated')) DEFAULT 'todo',
+    status TEXT NOT NULL CHECK (status IN ('TODO', 'WORKING', 'DANGER', 'OK')),
+    profile_id UUID REFERENCES profile(id) ON DELETE SET NULL,  -- audit: qui a cree/modifie
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     PRIMARY KEY (session_master_id, work_lead_master_id)
@@ -396,6 +405,7 @@ CREATE TABLE IF NOT EXISTS session_master_work_lead_master (
 
 CREATE INDEX idx_session_master_work_lead_master_work_lead_master_id ON session_master_work_lead_master(work_lead_master_id);
 CREATE INDEX idx_session_master_work_lead_master_status ON session_master_work_lead_master(status);
+CREATE INDEX idx_session_master_work_lead_master_profile_id ON session_master_work_lead_master(profile_id);
 
 CREATE TRIGGER update_session_master_work_lead_master_updated_at
     BEFORE UPDATE ON session_master_work_lead_master
@@ -479,6 +489,7 @@ ALTER TABLE project ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "group" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE group_profile ENABLE ROW LEVEL SECURITY;
 ALTER TABLE group_project ENABLE ROW LEVEL SECURITY;
+ALTER TABLE project_session_master ENABLE ROW LEVEL SECURITY;
 ALTER TABLE session_master ENABLE ROW LEVEL SECURITY;
 ALTER TABLE session ENABLE ROW LEVEL SECURITY;
 ALTER TABLE session_master_profile ENABLE ROW LEVEL SECURITY;
@@ -614,6 +625,53 @@ CREATE POLICY "Coach access own groups" ON "group"
             AND gp.group_id = "group".id
         )
         AND is_deleted = FALSE
+    );
+
+-- --------------------------------------------
+-- Project Session Master (pivot)
+-- --------------------------------------------
+
+CREATE POLICY "Admin full access project_session_master" ON project_session_master
+    FOR ALL TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM profile p
+            WHERE p.user_uid = auth.uid() AND p.type_profile_id = 1
+        )
+    );
+
+CREATE POLICY "Super Coach read all project_session_master" ON project_session_master
+    FOR SELECT TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM profile p
+            WHERE p.user_uid = auth.uid() AND p.type_profile_id = 2
+        )
+    );
+
+CREATE POLICY "Coach access group project_session_master" ON project_session_master
+    FOR ALL TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM profile p
+            JOIN group_profile gp ON gp.profile_id = p.id
+            JOIN group_project gpj ON gpj.group_id = gp.group_id
+            WHERE p.user_uid = auth.uid()
+            AND p.type_profile_id = 3
+            AND gpj.project_id = project_session_master.project_id
+        )
+    );
+
+CREATE POLICY "Navigant read own project_session_master" ON project_session_master
+    FOR SELECT TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM profile p
+            JOIN project proj ON proj.profile_id = p.id
+            WHERE p.user_uid = auth.uid()
+            AND p.type_profile_id = 4
+            AND proj.id = project_session_master.project_id
+        )
     );
 
 -- --------------------------------------------

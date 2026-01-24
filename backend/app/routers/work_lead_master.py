@@ -8,12 +8,37 @@ from app.auth import get_current_user, require_super_coach, CurrentUser, supabas
 router = APIRouter(prefix="/api/work-lead-masters", tags=["work-lead-masters"])
 
 
+def _get_current_status(work_lead_master_id: str) -> str:
+    """
+    Calcule le statut courant d'un work_lead_master depuis la table pivot.
+    - Pas d'entree dans session_master_work_lead_master => NEW
+    - Entrees existantes => statut de l'entree la plus recente (updated_at)
+    """
+    try:
+        response = supabase_admin.table("session_master_work_lead_master")\
+            .select("status, updated_at")\
+            .eq("work_lead_master_id", work_lead_master_id)\
+            .order("updated_at", desc=True)\
+            .limit(1)\
+            .execute()
+
+        if response.data and len(response.data) > 0:
+            return response.data[0]["status"]
+        return "NEW"
+    except:
+        return "NEW"
+
+
 def _enrich_work_lead_master(data: dict) -> dict:
-    """Enrichit un work_lead_master avec le nom du type"""
+    """Enrichit un work_lead_master avec le nom du type et le statut courant"""
     if data.get("work_lead_type"):
         data["work_lead_type_name"] = data["work_lead_type"].get("name")
     if "work_lead_type" in data:
         del data["work_lead_type"]
+
+    # Calculer le statut courant depuis la table pivot
+    data["current_status"] = _get_current_status(data["id"])
+
     return data
 
 

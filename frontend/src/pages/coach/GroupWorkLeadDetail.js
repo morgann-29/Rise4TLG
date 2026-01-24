@@ -5,6 +5,15 @@ import FileManager from '../../components/FileManager'
 import RichTextEditor from '../../components/RichTextEditor'
 import { coachService } from '../../services/coachService'
 
+// Status labels and colors
+const STATUS_CONFIG = {
+  NEW: { label: 'Nouveau', bgClass: 'bg-purple-100 dark:bg-purple-900', textClass: 'text-purple-800 dark:text-purple-200' },
+  TODO: { label: 'A travailler', bgClass: 'bg-gray-100 dark:bg-gray-700', textClass: 'text-gray-800 dark:text-gray-200' },
+  WORKING: { label: 'En cours', bgClass: 'bg-blue-100 dark:bg-blue-900', textClass: 'text-blue-800 dark:text-blue-200' },
+  DANGER: { label: 'Danger', bgClass: 'bg-red-100 dark:bg-red-900', textClass: 'text-red-800 dark:text-red-200' },
+  OK: { label: 'Valide', bgClass: 'bg-green-100 dark:bg-green-900', textClass: 'text-green-800 dark:text-green-200' }
+}
+
 function GroupWorkLeadDetail() {
   const { groupId, workLeadId } = useParams()
   const navigate = useNavigate()
@@ -175,7 +184,7 @@ function GroupWorkLeadDetail() {
 
         {/* Infos */}
         <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
             <div>
               <span className="text-gray-500 dark:text-gray-400">Type</span>
               <p className="font-medium text-gray-900 dark:text-white">
@@ -183,7 +192,19 @@ function GroupWorkLeadDetail() {
               </p>
             </div>
             <div>
-              <span className="text-gray-500 dark:text-gray-400">Statut</span>
+              <span className="text-gray-500 dark:text-gray-400">Statut courant</span>
+              <p className="mt-1">
+                {workLead.current_status ? (
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_CONFIG[workLead.current_status]?.bgClass || ''} ${STATUS_CONFIG[workLead.current_status]?.textClass || ''}`}>
+                    {STATUS_CONFIG[workLead.current_status]?.label || workLead.current_status}
+                  </span>
+                ) : (
+                  <span className="text-gray-400">-</span>
+                )}
+              </p>
+            </div>
+            <div>
+              <span className="text-gray-500 dark:text-gray-400">Etat</span>
               <p className="font-medium text-gray-900 dark:text-white">
                 {workLead.is_archived ? 'Archive' : 'Actif'}
               </p>
