@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import CoachLayout from '../../components/CoachLayout'
 import { coachService } from '../../services/coachService'
+import LocationPicker from '../../components/LocationPicker'
 
 function GroupSessions() {
   const { groupId } = useParams()
@@ -16,12 +17,15 @@ function GroupSessions() {
     name: '',
     type_seance_id: '',
     date_start: '',
-    date_end: ''
+    date_end: '',
+    location: null
   })
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError] = useState(null)
   const [showDeleted, setShowDeleted] = useState(false)
   const [typeSeances, setTypeSeances] = useState([])
+  const [projects, setProjects] = useState([])
+  const [selectedProjectIds, setSelectedProjectIds] = useState([])
 
   useEffect(() => {
     loadData()
@@ -30,14 +34,16 @@ function GroupSessions() {
   const loadData = async () => {
     try {
       setLoading(true)
-      const [groupData, sessionsData, typesData] = await Promise.all([
+      const [groupData, sessionsData, typesData, projectsData] = await Promise.all([
         coachService.getGroupBasic(groupId),
         coachService.getGroupSessions(groupId, showDeleted),
-        coachService.getTypeSeances()
+        coachService.getTypeSeances(),
+        coachService.getGroupProjects(groupId)
       ])
       setGroup(groupData)
       setSessions(sessionsData || [])
       setTypeSeances(typesData || [])
+      setProjects(projectsData || [])
       setError(null)
     } catch (err) {
       setError('Erreur lors du chargement')
@@ -56,12 +62,15 @@ function GroupSessions() {
         name: formData.name,
         type_seance_id: parseInt(formData.type_seance_id),
         date_start: formData.date_start || null,
-        date_end: formData.date_end || null
+        date_end: formData.date_end || null,
+        location: formData.location
       }
 
       if (editingItem) {
         await coachService.updateGroupSession(groupId, editingItem.id, submitData)
       } else {
+        // Pour la creation, ajouter les project_ids selectionnes
+        submitData.project_ids = selectedProjectIds
         await coachService.createGroupSession(groupId, submitData)
       }
       setShowModal(false)
@@ -90,13 +99,24 @@ function GroupSessions() {
       name: '',
       type_seance_id: '',
       date_start: '',
-      date_end: ''
+      date_end: '',
+      location: null
     })
+    // Selectionner tous les projets par defaut
+    setSelectedProjectIds(projects.map(p => p.id))
   }
 
   const openCreateModal = () => {
     setEditingItem(null)
-    resetForm()
+    setFormData({
+      name: '',
+      type_seance_id: '',
+      date_start: '',
+      date_end: '',
+      location: null
+    })
+    // Selectionner tous les projets par defaut
+    setSelectedProjectIds(projects.map(p => p.id))
     setActionError(null)
     setShowModal(true)
   }
@@ -108,10 +128,29 @@ function GroupSessions() {
       name: item.name,
       type_seance_id: item.type_seance_id?.toString() || '',
       date_start: item.date_start ? item.date_start.slice(0, 16) : '',
-      date_end: item.date_end ? item.date_end.slice(0, 16) : ''
+      date_end: item.date_end ? item.date_end.slice(0, 16) : '',
+      location: item.location || null
     })
     setActionError(null)
     setShowModal(true)
+  }
+
+  const toggleProjectSelection = (projectId) => {
+    setSelectedProjectIds(prev => {
+      if (prev.includes(projectId)) {
+        return prev.filter(id => id !== projectId)
+      } else {
+        return [...prev, projectId]
+      }
+    })
+  }
+
+  const toggleAllProjects = () => {
+    if (selectedProjectIds.length === projects.length) {
+      setSelectedProjectIds([])
+    } else {
+      setSelectedProjectIds(projects.map(p => p.id))
+    }
   }
 
   const handleRowClick = (item) => {
@@ -305,7 +344,7 @@ function GroupSessions() {
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4">
             <div className="fixed inset-0 bg-black opacity-50" onClick={() => setShowModal(false)}></div>
-            <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
                 {editingItem ? 'Modifier la seance' : 'Nouvelle seance'}
               </h3>
@@ -371,6 +410,62 @@ function GroupSessions() {
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Lieu
+                  </label>
+                  <LocationPicker
+                    value={formData.location}
+                    onChange={(location) => setFormData({ ...formData, location })}
+                  />
+                </div>
+
+                {/* Selection des projets (uniquement en creation) */}
+                {!editingItem && projects.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Projets concernes
+                      </label>
+                      <button
+                        type="button"
+                        onClick={toggleAllProjects}
+                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        {selectedProjectIds.length === projects.length ? 'Deselectionner tout' : 'Selectionner tout'}
+                      </button>
+                    </div>
+                    <div className="max-h-40 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-lg p-2 space-y-1">
+                      {projects.map((project) => (
+                        <label
+                          key={project.id}
+                          className="flex items-center p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedProjectIds.includes(project.id)}
+                            onChange={() => toggleProjectSelection(project.id)}
+                            className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 mr-3"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                              {project.name}
+                            </div>
+                            {project.navigant_name && (
+                              <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                {project.navigant_name}
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {selectedProjectIds.length} projet(s) selectionne(s) sur {projects.length}
+                    </p>
+                  </div>
+                )}
 
                 <div className="flex justify-end space-x-3 pt-4">
                   <button

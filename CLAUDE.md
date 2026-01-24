@@ -43,6 +43,7 @@ frontend/
       CoachLayout.js      # Layout coach (menus dynamiques par groupe)
       FileManager/        # Gestion upload/liste fichiers
       RichTextEditor/     # Editeur TipTap avec médias
+      LocationPicker/     # Carte Leaflet pour selection de lieu
       shared/             # Composants partagés (ConfirmModal)
     contexts/        # AuthContext, ThemeContext
     pages/
@@ -223,6 +224,12 @@ cd frontend && npm start
 - Liste avec preview images
 - Suppression avec confirmation
 
+### LocationPicker
+- Carte Leaflet (OpenStreetMap)
+- Centre par defaut: 47.68, -3.40 (Bretagne)
+- Clic pour placer un marqueur
+- Affichage coordonnees lat/lng
+
 ### Layouts
 - `AdminLayout` - Navigation admin (Users, Types référentiels)
 - `SuperCoachLayout` - Navigation super coach (Dashboard, Projects, Groups, Models)
@@ -263,3 +270,14 @@ cd frontend && npm start
 - Triggers auto `updated_at` sur toutes les tables
 - Trigger `check_project_owner_is_navigant()` - Projets doivent appartenir à Navigant
 - Trigger `check_session_master_coach_is_coach()` - Coach session doit être Coach
+
+## Flux creation de seance (Coach)
+
+Quand un Coach cree une seance pour un groupe:
+1. Creation `session_master` (seance groupe)
+2. Pour chaque projet selectionne:
+   - Creation `project_session_master` (pivot)
+   - Creation `session` (seance individuelle liee au projet)
+   - Creation `session_profile` (equipage = navigant du projet)
+
+Les sessions individuelles heritent: nom, type, dates, location de la session_master.

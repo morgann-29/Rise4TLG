@@ -47,6 +47,7 @@ class GroupSessionCreate(BaseModel):
     date_end: Optional[datetime] = None
     location: Optional[dict] = None
     content: Optional[str] = None
+    project_ids: Optional[List[str]] = None  # Projets pour lesquels creer des sessions individuelles
 
 
 class GroupWorkLead(BaseModel):
@@ -375,7 +376,7 @@ async def create_group_session(
     data: GroupSessionCreate,
     user: CurrentUser = Depends(require_coach)
 ):
-    """Creer une nouvelle session pour le groupe"""
+    """Creer une nouvelle session pour le groupe et les sessions individuelles par projet"""
     try:
         if not await _verify_coach_in_group(user.active_profile_id, group_id):
             raise HTTPException(
@@ -396,6 +397,7 @@ async def create_group_session(
                 detail="Type de seance non trouve"
             )
 
+        # Creer la session_master
         insert_data = {
             "name": data.name,
             "profile_id": user.active_profile_id,
@@ -418,10 +420,65 @@ async def create_group_session(
                 detail="Erreur creation session"
             )
 
+        session_master_id = response.data[0]["id"]
+
+        # Creer les sessions individuelles pour chaque projet selectionne
+        if data.project_ids and len(data.project_ids) > 0:
+            # Recuperer les projets du groupe avec leur profile_id
+            group_projects = supabase_admin.table("group_project")\
+                .select("project_id, project(profile_id)")\
+                .eq("group_id", group_id)\
+                .execute()
+
+            # Map project_id -> profile_id
+            project_profiles = {}
+            for gp in group_projects.data:
+                project_profiles[gp["project_id"]] = gp["project"]["profile_id"] if gp.get("project") else None
+
+            valid_project_ids = set(project_profiles.keys())
+
+            for project_id in data.project_ids:
+                if project_id not in valid_project_ids:
+                    continue  # Ignorer les projets non valides
+
+                # Creer l'entree pivot project_session_master
+                supabase_admin.table("project_session_master")\
+                    .insert({
+                        "project_id": project_id,
+                        "session_master_id": session_master_id
+                    })\
+                    .execute()
+
+                # Creer la session individuelle
+                session_insert = {
+                    "name": data.name,
+                    "project_id": project_id,
+                    "session_master_id": session_master_id,
+                    "type_seance_id": data.type_seance_id,
+                    "date_start": data.date_start.isoformat() if data.date_start else None,
+                    "date_end": data.date_end.isoformat() if data.date_end else None,
+                    "location": data.location
+                }
+
+                session_response = supabase_admin.table("session")\
+                    .insert(session_insert)\
+                    .execute()
+
+                # Ajouter l'equipage initial (profile du projet = navigant)
+                if session_response.data and project_profiles.get(project_id):
+                    session_id = session_response.data[0]["id"]
+                    profile_id = project_profiles[project_id]
+                    supabase_admin.table("session_profile")\
+                        .insert({
+                            "session_id": session_id,
+                            "profile_id": profile_id
+                        })\
+                        .execute()
+
         # Recuperer avec jointure
         session = supabase_admin.table("session_master")\
             .select("*, type_seance(name, is_sailing)")\
-            .eq("id", response.data[0]["id"])\
+            .eq("id", session_master_id)\
             .execute()
 
         s = session.data[0]
