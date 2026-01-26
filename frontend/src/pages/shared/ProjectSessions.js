@@ -41,14 +41,16 @@ function ProjectSessions() {
       setLoading(true)
       if (isCoachContext) {
         // Coach context: fetch from coach endpoints
-        const [groupData, projectData, sessionsData] = await Promise.all([
+        const [groupData, projectData, sessionsData, typesData] = await Promise.all([
           coachService.getGroupBasic(groupId),
           coachService.getProjectDetail(groupId, projectId),
-          coachService.getProjectSessions(groupId, projectId, showDeleted)
+          coachService.getProjectSessions(groupId, projectId, showDeleted),
+          coachService.getTypeSeances()
         ])
         setGroup(groupData)
         setProject(projectData)
         setSessions(sessionsData || [])
+        setTypeSeances(typesData || [])
       } else {
         // Navigant context: fetch from navigant endpoints
         const [projectData, sessionsData, typesData] = await Promise.all([
@@ -71,8 +73,6 @@ function ProjectSessions() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (isCoachContext) return // Coach cannot modify
-
     setActionLoading(true)
     setActionError(null)
     try {
@@ -84,10 +84,18 @@ function ProjectSessions() {
         location: formData.location
       }
 
-      if (editingItem) {
-        await navigantService.updateSession(editingItem.id, submitData)
+      if (isCoachContext) {
+        if (editingItem) {
+          await coachService.updateProjectSession(groupId, projectId, editingItem.id, submitData)
+        } else {
+          await coachService.createProjectSession(groupId, projectId, submitData)
+        }
       } else {
-        await navigantService.createSession(submitData)
+        if (editingItem) {
+          await navigantService.updateSession(editingItem.id, submitData)
+        } else {
+          await navigantService.createSession(submitData)
+        }
       }
       setShowModal(false)
       setEditingItem(null)
@@ -101,10 +109,13 @@ function ProjectSessions() {
   }
 
   const handleDelete = async (item) => {
-    if (isCoachContext) return // Coach cannot modify
     if (!window.confirm(`Supprimer la seance "${item.name}" ?`)) return
     try {
-      await navigantService.deleteSession(item.id)
+      if (isCoachContext) {
+        await coachService.deleteProjectSession(groupId, projectId, item.id)
+      } else {
+        await navigantService.deleteSession(item.id)
+      }
       await loadData()
     } catch (err) {
       alert(err.response?.data?.detail || 'Erreur lors de la suppression')
@@ -122,7 +133,6 @@ function ProjectSessions() {
   }
 
   const openCreateModal = () => {
-    if (isCoachContext) return // Coach cannot modify
     setEditingItem(null)
     setFormData({
       name: '',
@@ -136,7 +146,6 @@ function ProjectSessions() {
   }
 
   const openEditModal = (item, e) => {
-    if (isCoachContext) return // Coach cannot modify
     e.stopPropagation()
     setEditingItem(item)
     setFormData({
@@ -188,7 +197,7 @@ function ProjectSessions() {
               Seances
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {isCoachContext ? 'Seances du projet (lecture seule)' : 'Seances de votre projet'}
+              {isCoachContext ? 'Seances du projet' : 'Seances de votre projet'}
             </p>
           </div>
           <div className="flex items-center space-x-4">
@@ -201,17 +210,15 @@ function ProjectSessions() {
               />
               Supprimees
             </label>
-            {!isCoachContext && (
-              <button
-                onClick={openCreateModal}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
-              >
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Nouvelle seance
-              </button>
-            )}
+            <button
+              onClick={openCreateModal}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Nouvelle seance
+            </button>
           </div>
         </div>
 
@@ -238,11 +245,9 @@ function ProjectSessions() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Statut
                 </th>
-                {!isCoachContext && (
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Actions
-                  </th>
-                )}
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -305,46 +310,42 @@ function ProjectSessions() {
                       </span>
                     )}
                   </td>
-                  {!isCoachContext && (
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end space-x-2" onClick={(e) => e.stopPropagation()}>
-                        {!item.is_deleted && (
-                          <>
-                            <button
-                              onClick={(e) => openEditModal(item, e)}
-                              className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300"
-                              title="Modifier"
-                            >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                              </svg>
-                            </button>
-                            <button
-                              onClick={() => handleDelete(item)}
-                              className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
-                              title="Supprimer"
-                            >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  )}
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="flex justify-end space-x-2" onClick={(e) => e.stopPropagation()}>
+                      {!item.is_deleted && (
+                        <>
+                          <button
+                            onClick={(e) => openEditModal(item, e)}
+                            className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300"
+                            title="Modifier"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => handleDelete(item)}
+                            className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
+                            title="Supprimer"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
               {sessions.length === 0 && (
                 <tr>
-                  <td colSpan={isCoachContext ? 4 : 5} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={5} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
                     <svg className="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                     <p>Aucune seance</p>
-                    {!isCoachContext && (
-                      <p className="text-sm mt-1">Creez votre premiere seance</p>
-                    )}
+                    <p className="text-sm mt-1">Creez votre premiere seance</p>
                   </td>
                 </tr>
               )}
@@ -353,8 +354,8 @@ function ProjectSessions() {
         </div>
       </div>
 
-      {/* Modal - Only for Navigant */}
-      {!isCoachContext && showModal && (
+      {/* Modal */}
+      {showModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4">
             <div className="fixed inset-0 bg-black opacity-50" onClick={() => setShowModal(false)}></div>

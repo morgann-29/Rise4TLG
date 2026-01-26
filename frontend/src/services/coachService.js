@@ -92,7 +92,7 @@ export const coachService = {
   },
 
   // ============================================
-  // PROJECTS (lecture seule)
+  // PROJECTS
   // ============================================
 
   async getGroupProjects(groupId) {
@@ -105,12 +105,34 @@ export const coachService = {
     return response.data
   },
 
+  // ============================================
+  // PROJECT SESSIONS (sessions du projet)
+  // ============================================
+
   async getProjectSessions(groupId, projectId, includeDeleted = false) {
     const response = await api.get(`/api/coach/groups/${groupId}/projects/${projectId}/sessions`, {
       params: { include_deleted: includeDeleted }
     })
     return response.data
   },
+
+  async createProjectSession(groupId, projectId, data) {
+    const response = await api.post(`/api/coach/groups/${groupId}/projects/${projectId}/sessions`, data)
+    return response.data
+  },
+
+  async updateProjectSession(groupId, projectId, sessionId, data) {
+    const response = await api.put(`/api/coach/groups/${groupId}/projects/${projectId}/sessions/${sessionId}`, data)
+    return response.data
+  },
+
+  async deleteProjectSession(groupId, projectId, sessionId) {
+    await api.delete(`/api/coach/groups/${groupId}/projects/${projectId}/sessions/${sessionId}`)
+  },
+
+  // ============================================
+  // PROJECT WORK LEADS (axes de travail du projet)
+  // ============================================
 
   async getProjectWorkLeads(groupId, projectId, includeDeleted = false, includeArchived = false) {
     const response = await api.get(`/api/coach/groups/${groupId}/projects/${projectId}/work-leads`, {
@@ -120,6 +142,28 @@ export const coachService = {
       }
     })
     return response.data
+  },
+
+  async createProjectWorkLead(groupId, projectId, data) {
+    const response = await api.post(`/api/coach/groups/${groupId}/projects/${projectId}/work-leads`, data)
+    return response.data
+  },
+
+  async updateProjectWorkLead(groupId, projectId, workLeadId, data) {
+    const response = await api.put(`/api/coach/groups/${groupId}/projects/${projectId}/work-leads/${workLeadId}`, data)
+    return response.data
+  },
+
+  async deleteProjectWorkLead(groupId, projectId, workLeadId) {
+    await api.delete(`/api/coach/groups/${groupId}/projects/${projectId}/work-leads/${workLeadId}`)
+  },
+
+  async archiveProjectWorkLead(groupId, projectId, workLeadId) {
+    await api.post(`/api/coach/groups/${groupId}/projects/${projectId}/work-leads/${workLeadId}/archive`)
+  },
+
+  async unarchiveProjectWorkLead(groupId, projectId, workLeadId) {
+    await api.post(`/api/coach/groups/${groupId}/projects/${projectId}/work-leads/${workLeadId}/unarchive`)
   },
 
   // ============================================

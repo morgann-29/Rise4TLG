@@ -1,12 +1,17 @@
 import { useParams, useNavigate } from 'react-router-dom'
+import { useAuth } from '../../contexts/AuthContext'
+import CoachLayout from '../../components/CoachLayout'
 import NavigantLayout from '../../components/NavigantLayout'
 
 function SessionDetail() {
   const { sessionId } = useParams()
   const navigate = useNavigate()
+  const { isCoach } = useAuth()
+
+  const Layout = isCoach ? CoachLayout : NavigantLayout
 
   return (
-    <NavigantLayout>
+    <Layout>
       <div className="space-y-6">
         {/* Header with back button */}
         <div className="flex items-center space-x-4">
@@ -41,7 +46,7 @@ function SessionDetail() {
           </p>
         </div>
       </div>
-    </NavigantLayout>
+    </Layout>
   )
 }
 

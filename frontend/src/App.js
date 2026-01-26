@@ -3,8 +3,6 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 // Navigant pages
 import NavigantDashboard from './pages/navigant/NavigantDashboard'
-import NavigantSessions from './pages/navigant/Sessions'
-import NavigantWorkLeads from './pages/navigant/WorkLeads'
 // Shared pages
 import SessionDetail from './pages/shared/SessionDetail'
 import WorkLeadDetail from './pages/shared/WorkLeadDetail'
@@ -86,6 +84,16 @@ function OperatorRoute({ children }) {
   if (isAdmin) return <Navigate to="/admin" />
   if (isSuperCoach) return <Navigate to="/super-coach" />
   if (isCoach) return <Navigate to="/coach" />
+  return children
+}
+
+// Route partagee Coach + Navigant
+function SharedRoute({ children }) {
+  const { isAuthenticated, isAdmin, isSuperCoach, isCoach } = useAuth()
+  if (!isAuthenticated) return <Navigate to="/login" />
+  if (isAdmin) return <Navigate to="/admin" />
+  if (isSuperCoach) return <Navigate to="/super-coach" />
+  // Coach et Navigant peuvent acceder
   return children
 }
 
@@ -360,7 +368,7 @@ function App() {
             path="/navigant/project/sessions"
             element={
               <OperatorRoute>
-                <NavigantSessions />
+                <ProjectSessions />
               </OperatorRoute>
             }
           />
@@ -369,27 +377,27 @@ function App() {
             path="/navigant/project/work-leads"
             element={
               <OperatorRoute>
-                <NavigantWorkLeads />
+                <ProjectWorkLeads />
               </OperatorRoute>
             }
           />
 
-          {/* Shared routes (accessible by multiple roles) */}
+          {/* Shared routes (accessible by Coach + Navigant) */}
           <Route
             path="/shared/sessions/:sessionId"
             element={
-              <OperatorRoute>
+              <SharedRoute>
                 <SessionDetail />
-              </OperatorRoute>
+              </SharedRoute>
             }
           />
 
           <Route
             path="/shared/work-leads/:workLeadId"
             element={
-              <OperatorRoute>
+              <SharedRoute>
                 <WorkLeadDetail />
-              </OperatorRoute>
+              </SharedRoute>
             }
           />
 

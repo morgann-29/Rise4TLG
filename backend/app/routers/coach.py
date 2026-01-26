@@ -29,6 +29,7 @@ class SessionProject(BaseModel):
     id: str
     name: str
     navigant_name: Optional[str] = None
+    session_id: Optional[str] = None
 
 
 class GroupSession(BaseModel):
@@ -140,7 +141,7 @@ def _get_session_projects(session_master_id: str) -> list:
     try:
         # Requete sur session pour trouver les projets participants
         response = supabase_admin.table("session")\
-            .select("project_id, project(id, name, profile(user_uid))")\
+            .select("id, project_id, project(id, name, profile(user_uid))")\
             .eq("session_master_id", session_master_id)\
             .eq("is_deleted", False)\
             .execute()
@@ -150,6 +151,7 @@ def _get_session_projects(session_master_id: str) -> list:
         for item in response.data:
             project = item.get("project")
             project_id = item.get("project_id")
+            session_id = item.get("id")  # L'id de la session individuelle
             # Eviter les doublons (au cas ou)
             if project and project_id not in seen_project_ids:
                 seen_project_ids.add(project_id)
@@ -164,7 +166,8 @@ def _get_session_projects(session_master_id: str) -> list:
                 projects.append({
                     "id": project["id"],
                     "name": project["name"],
-                    "navigant_name": navigant_name
+                    "navigant_name": navigant_name,
+                    "session_id": session_id
                 })
         return projects
     except:
@@ -1460,7 +1463,7 @@ async def list_project_sessions(
     include_deleted: bool = False,
     user: CurrentUser = Depends(require_coach)
 ):
-    """Liste les sessions d'un projet (lecture seule pour le coach)"""
+    """Liste les sessions d'un projet"""
     try:
         # Verifier acces au groupe
         if not await _verify_coach_in_group(user.active_profile_id, group_id):
@@ -1514,6 +1517,226 @@ async def list_project_sessions(
         )
 
 
+class ProjectSessionCreate(BaseModel):
+    name: str
+    type_seance_id: int
+    date_start: Optional[datetime] = None
+    date_end: Optional[datetime] = None
+    location: Optional[dict] = None
+
+
+@router.post("/groups/{group_id}/projects/{project_id}/sessions", response_model=ProjectSession, status_code=status.HTTP_201_CREATED)
+async def create_project_session(
+    group_id: str,
+    project_id: str,
+    data: ProjectSessionCreate,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Creer une session pour un projet"""
+    try:
+        # Verifier acces au groupe
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Verifier que le projet appartient au groupe
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        # Verifier que le type_seance existe
+        type_check = supabase_admin.table("type_seance")\
+            .select("id")\
+            .eq("id", data.type_seance_id)\
+            .eq("is_deleted", False)\
+            .execute()
+
+        if not type_check.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Type de seance non trouve"
+            )
+
+        insert_data = {
+            "name": data.name,
+            "project_id": project_id,
+            "type_seance_id": data.type_seance_id,
+            "date_start": data.date_start.isoformat() if data.date_start else None,
+            "date_end": data.date_end.isoformat() if data.date_end else None,
+            "location": data.location
+        }
+
+        response = supabase_admin.table("session")\
+            .insert(insert_data)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Erreur creation session"
+            )
+
+        # Recuperer avec jointure
+        session = supabase_admin.table("session")\
+            .select("*, type_seance(name, is_sailing)")\
+            .eq("id", response.data[0]["id"])\
+            .execute()
+
+        s = session.data[0]
+        type_seance = s.get("type_seance")
+
+        return ProjectSession(
+            id=s["id"],
+            name=s["name"],
+            type_seance_id=s["type_seance_id"],
+            type_seance_name=type_seance.get("name") if type_seance else None,
+            type_seance_is_sailing=type_seance.get("is_sailing") if type_seance else None,
+            date_start=s.get("date_start"),
+            date_end=s.get("date_end"),
+            location=s.get("location"),
+            content=s.get("content"),
+            is_deleted=s.get("is_deleted", False),
+            created_at=s["created_at"],
+            updated_at=s["updated_at"]
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.put("/groups/{group_id}/projects/{project_id}/sessions/{session_id}", response_model=ProjectSession)
+async def update_project_session(
+    group_id: str,
+    project_id: str,
+    session_id: str,
+    data: ProjectSessionCreate,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Mettre a jour une session d'un projet"""
+    try:
+        # Verifier acces au groupe
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Verifier que le projet appartient au groupe
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        update_data = {
+            "name": data.name,
+            "type_seance_id": data.type_seance_id,
+            "date_start": data.date_start.isoformat() if data.date_start else None,
+            "date_end": data.date_end.isoformat() if data.date_end else None,
+            "location": data.location
+        }
+
+        response = supabase_admin.table("session")\
+            .update(update_data)\
+            .eq("id", session_id)\
+            .eq("project_id", project_id)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Session non trouvee"
+            )
+
+        # Recuperer avec jointure
+        session = supabase_admin.table("session")\
+            .select("*, type_seance(name, is_sailing)")\
+            .eq("id", session_id)\
+            .execute()
+
+        s = session.data[0]
+        type_seance = s.get("type_seance")
+
+        return ProjectSession(
+            id=s["id"],
+            name=s["name"],
+            type_seance_id=s["type_seance_id"],
+            type_seance_name=type_seance.get("name") if type_seance else None,
+            type_seance_is_sailing=type_seance.get("is_sailing") if type_seance else None,
+            date_start=s.get("date_start"),
+            date_end=s.get("date_end"),
+            location=s.get("location"),
+            content=s.get("content"),
+            is_deleted=s.get("is_deleted", False),
+            created_at=s["created_at"],
+            updated_at=s["updated_at"]
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.delete("/groups/{group_id}/projects/{project_id}/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project_session(
+    group_id: str,
+    project_id: str,
+    session_id: str,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Soft delete une session d'un projet"""
+    try:
+        # Verifier acces au groupe
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Verifier que le projet appartient au groupe
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        response = supabase_admin.table("session")\
+            .update({"is_deleted": True})\
+            .eq("id", session_id)\
+            .eq("project_id", project_id)\
+            .eq("is_deleted", False)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Session non trouvee"
+            )
+
+        return None
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
 @router.get("/groups/{group_id}/projects/{project_id}/work-leads", response_model=List[ProjectWorkLead])
 async def list_project_work_leads(
     group_id: str,
@@ -1522,7 +1745,7 @@ async def list_project_work_leads(
     include_archived: bool = False,
     user: CurrentUser = Depends(require_coach)
 ):
-    """Liste les axes de travail d'un projet (lecture seule pour le coach)"""
+    """Liste les axes de travail d'un projet"""
     try:
         # Verifier acces au groupe
         if not await _verify_coach_in_group(user.active_profile_id, group_id):
@@ -1567,6 +1790,309 @@ async def list_project_work_leads(
             ))
 
         return work_leads
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+class ProjectWorkLeadCreate(BaseModel):
+    name: str
+    work_lead_type_id: str
+
+
+@router.post("/groups/{group_id}/projects/{project_id}/work-leads", response_model=ProjectWorkLead, status_code=status.HTTP_201_CREATED)
+async def create_project_work_lead(
+    group_id: str,
+    project_id: str,
+    data: ProjectWorkLeadCreate,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Creer un axe de travail pour un projet"""
+    try:
+        # Verifier acces au groupe
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Verifier que le projet appartient au groupe
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        # Verifier que le work_lead_type existe
+        type_check = supabase_admin.table("work_lead_type")\
+            .select("id")\
+            .eq("id", data.work_lead_type_id)\
+            .eq("is_deleted", False)\
+            .execute()
+
+        if not type_check.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Type d'axe de travail non trouve"
+            )
+
+        insert_data = {
+            "name": data.name,
+            "project_id": project_id,
+            "work_lead_type_id": data.work_lead_type_id
+        }
+
+        response = supabase_admin.table("work_lead")\
+            .insert(insert_data)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Erreur creation axe de travail"
+            )
+
+        # Recuperer avec jointure
+        work_lead = supabase_admin.table("work_lead")\
+            .select("*, work_lead_type(name)")\
+            .eq("id", response.data[0]["id"])\
+            .execute()
+
+        w = work_lead.data[0]
+        work_lead_type = w.get("work_lead_type")
+
+        return ProjectWorkLead(
+            id=w["id"],
+            name=w["name"],
+            work_lead_type_id=w["work_lead_type_id"],
+            work_lead_type_name=work_lead_type.get("name") if work_lead_type else None,
+            content=w.get("content"),
+            current_status="NEW",
+            is_deleted=w.get("is_deleted", False),
+            is_archived=w.get("is_archived", False),
+            created_at=w["created_at"],
+            updated_at=w["updated_at"]
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.put("/groups/{group_id}/projects/{project_id}/work-leads/{work_lead_id}", response_model=ProjectWorkLead)
+async def update_project_work_lead(
+    group_id: str,
+    project_id: str,
+    work_lead_id: str,
+    data: ProjectWorkLeadCreate,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Mettre a jour un axe de travail d'un projet"""
+    try:
+        # Verifier acces au groupe
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Verifier que le projet appartient au groupe
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        update_data = {
+            "name": data.name,
+            "work_lead_type_id": data.work_lead_type_id
+        }
+
+        response = supabase_admin.table("work_lead")\
+            .update(update_data)\
+            .eq("id", work_lead_id)\
+            .eq("project_id", project_id)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Axe de travail non trouve"
+            )
+
+        # Recuperer avec jointure
+        work_lead = supabase_admin.table("work_lead")\
+            .select("*, work_lead_type(name)")\
+            .eq("id", work_lead_id)\
+            .execute()
+
+        w = work_lead.data[0]
+        work_lead_type = w.get("work_lead_type")
+
+        return ProjectWorkLead(
+            id=w["id"],
+            name=w["name"],
+            work_lead_type_id=w["work_lead_type_id"],
+            work_lead_type_name=work_lead_type.get("name") if work_lead_type else None,
+            content=w.get("content"),
+            current_status=_get_current_status_for_work_lead(w["id"]),
+            is_deleted=w.get("is_deleted", False),
+            is_archived=w.get("is_archived", False),
+            created_at=w["created_at"],
+            updated_at=w["updated_at"]
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.delete("/groups/{group_id}/projects/{project_id}/work-leads/{work_lead_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project_work_lead(
+    group_id: str,
+    project_id: str,
+    work_lead_id: str,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Soft delete un axe de travail d'un projet"""
+    try:
+        # Verifier acces au groupe
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Verifier que le projet appartient au groupe
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        response = supabase_admin.table("work_lead")\
+            .update({"is_deleted": True})\
+            .eq("id", work_lead_id)\
+            .eq("project_id", project_id)\
+            .eq("is_deleted", False)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Axe de travail non trouve"
+            )
+
+        return None
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.post("/groups/{group_id}/projects/{project_id}/work-leads/{work_lead_id}/archive", status_code=status.HTTP_204_NO_CONTENT)
+async def archive_project_work_lead(
+    group_id: str,
+    project_id: str,
+    work_lead_id: str,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Archiver un axe de travail d'un projet"""
+    try:
+        # Verifier acces au groupe
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Verifier que le projet appartient au groupe
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        response = supabase_admin.table("work_lead")\
+            .update({"is_archived": True})\
+            .eq("id", work_lead_id)\
+            .eq("project_id", project_id)\
+            .eq("is_deleted", False)\
+            .eq("is_archived", False)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Axe de travail non trouve ou deja archive"
+            )
+
+        return None
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.post("/groups/{group_id}/projects/{project_id}/work-leads/{work_lead_id}/unarchive", status_code=status.HTTP_204_NO_CONTENT)
+async def unarchive_project_work_lead(
+    group_id: str,
+    project_id: str,
+    work_lead_id: str,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Desarchiver un axe de travail d'un projet"""
+    try:
+        # Verifier acces au groupe
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Verifier que le projet appartient au groupe
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        response = supabase_admin.table("work_lead")\
+            .update({"is_archived": False})\
+            .eq("id", work_lead_id)\
+            .eq("project_id", project_id)\
+            .eq("is_deleted", False)\
+            .eq("is_archived", True)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Axe de travail non trouve ou non archive"
+            )
+
+        return None
 
     except HTTPException:
         raise

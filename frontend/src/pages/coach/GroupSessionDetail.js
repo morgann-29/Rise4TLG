@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import CoachLayout from '../../components/CoachLayout'
 import FileManager from '../../components/FileManager'
 import ContentEditor from '../../components/ContentEditor'
+import LocationPicker from '../../components/LocationPicker'
 import { coachService } from '../../services/coachService'
 
 function GroupSessionDetail() {
@@ -24,6 +25,10 @@ function GroupSessionDetail() {
   const [editDateEnd, setEditDateEnd] = useState('')
   const [modalLoading, setModalLoading] = useState(false)
   const [modalSaving, setModalSaving] = useState(false)
+
+  // Weather/Data modal states
+  const [showDataModal, setShowDataModal] = useState(false)
+  const [editLocation, setEditLocation] = useState(null)
 
   // Thematique states
   const [sessionWorkLeadMasters, setSessionWorkLeadMasters] = useState([])
@@ -135,6 +140,34 @@ function GroupSessionDetail() {
       setShowDatesModal(false)
     } catch (err) {
       console.error('Erreur sauvegarde dates:', err)
+      alert(err.response?.data?.detail || 'Erreur lors de la sauvegarde')
+    } finally {
+      setModalSaving(false)
+    }
+  }
+
+  // Open data/weather modal
+  const openDataModal = () => {
+    setEditLocation(session.location || null)
+    setShowDataModal(true)
+  }
+
+  // Save data/weather (location for now)
+  const saveData = async () => {
+    setModalSaving(true)
+    try {
+      await coachService.updateGroupSession(groupId, sessionId, {
+        name: session.name,
+        type_seance_id: session.type_seance_id,
+        date_start: session.date_start,
+        date_end: session.date_end,
+        location: editLocation,
+        content: session.content
+      })
+      setSession({ ...session, location: editLocation })
+      setShowDataModal(false)
+    } catch (err) {
+      console.error('Erreur sauvegarde donnees:', err)
       alert(err.response?.data?.detail || 'Erreur lors de la sauvegarde')
     } finally {
       setModalSaving(false)
@@ -352,13 +385,12 @@ function GroupSessionDetail() {
 
         {/* Infos - 3 blocs */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Bloc gauche - Date et duree (cliquable) */}
-          <button
-            onClick={openDatesModal}
-            className={`rounded-lg p-4 text-left transition-all hover:ring-2 hover:ring-offset-2 ${
+          {/* Bloc gauche - Date et duree */}
+          <div
+            className={`rounded-lg p-4 ${
               isCompleted
-                ? 'bg-green-50 dark:bg-green-900/30 hover:ring-green-400'
-                : 'bg-blue-50 dark:bg-blue-900/30 hover:ring-blue-400'
+                ? 'bg-green-50 dark:bg-green-900/30'
+                : 'bg-blue-50 dark:bg-blue-900/30'
             }`}
           >
             <div className="flex items-center justify-between mb-2">
@@ -370,9 +402,14 @@ function GroupSessionDetail() {
                   {isCompleted ? 'Seance realisee' : 'Seance programmee'}
                 </span>
               </div>
-              <svg className={`w-4 h-4 ${isCompleted ? 'text-green-400' : 'text-blue-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-              </svg>
+              <button
+                onClick={openDatesModal}
+                className={`p-1.5 rounded-lg transition-colors ${isCompleted ? 'hover:bg-green-100 dark:hover:bg-green-800' : 'hover:bg-blue-100 dark:hover:bg-blue-800'}`}
+              >
+                <svg className={`w-4 h-4 ${isCompleted ? 'text-green-400' : 'text-blue-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </button>
             </div>
             <p className={`text-sm ${isCompleted ? 'text-green-800 dark:text-green-200' : 'text-blue-800 dark:text-blue-200'}`}>
               {session.date_start
@@ -394,13 +431,10 @@ function GroupSessionDetail() {
                 )}
               </p>
             )}
-          </button>
+          </div>
 
-          {/* Bloc central - Projets et coach (cliquable) */}
-          <button
-            onClick={openParticipantsModal}
-            className="bg-white dark:bg-gray-800 shadow rounded-lg p-4 text-left transition-all hover:ring-2 hover:ring-offset-2 hover:ring-indigo-400"
-          >
+          {/* Bloc central - Projets et coach */}
+          <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center">
                 <svg className="w-5 h-5 mr-2 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -408,27 +442,29 @@ function GroupSessionDetail() {
                 </svg>
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Participants</span>
               </div>
-              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-              </svg>
+              <button
+                onClick={openParticipantsModal}
+                className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </button>
             </div>
             {/* Projets */}
             <div className="mb-3">
               {session.projects && session.projects.length > 0 ? (
                 <div className="flex flex-wrap gap-1">
-                  {session.projects.slice(0, 2).map((project) => (
-                    <span
+                  {session.projects.map((project) => (
+                    <button
                       key={project.id}
-                      className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+                      onClick={() => project.session_id && navigate(`/shared/sessions/${project.session_id}`)}
+                      disabled={!project.session_id}
+                      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 ${project.session_id ? 'hover:bg-indigo-100 dark:hover:bg-indigo-900 hover:text-indigo-800 dark:hover:text-indigo-200 cursor-pointer' : 'opacity-60 cursor-default'} transition-colors`}
                     >
                       {project.navigant_name ? `${project.navigant_name} (${project.name})` : project.name}
-                    </span>
+                    </button>
                   ))}
-                  {session.projects.length > 2 && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-                      +{session.projects.length - 2} autres
-                    </span>
-                  )}
                 </div>
               ) : (
                 <span className="text-sm text-gray-500 dark:text-gray-400">Aucun projet</span>
@@ -449,18 +485,35 @@ function GroupSessionDetail() {
                 </span>
               )}
             </div>
-          </button>
+          </div>
 
-          {/* Bloc droit - Meteo */}
+          {/* Bloc droit - Meteo et Data */}
           <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4">
-            <div className="flex items-center mb-3">
-              <svg className="w-5 h-5 mr-2 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
-              </svg>
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Meteo</span>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center">
+                <svg className="w-5 h-5 mr-2 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                </svg>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Meteo et Data</span>
+              </div>
+              <button
+                onClick={openDataModal}
+                className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </button>
             </div>
             <div className="flex items-center justify-center h-16">
-              {isCompleted ? (
+              {session.location ? (
+                <div className="text-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
+                    {session.location.lat?.toFixed(4)}, {session.location.lng?.toFixed(4)}
+                  </span>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Lieu defini</p>
+                </div>
+              ) : isCompleted ? (
                 <span className="text-sm text-gray-500 dark:text-gray-400 italic">
                   Meteo indisponible
                 </span>
@@ -885,6 +938,79 @@ function GroupSessionDetail() {
                   onClick={saveThematiques}
                   disabled={modalSaving}
                   className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50 flex items-center"
+                >
+                  {modalSaving ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Enregistrement...
+                    </>
+                  ) : (
+                    'Enregistrer'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Data/Meteo */}
+      {showDataModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+            onClick={() => setShowDataModal(false)}
+          />
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                Meteo et Data
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                Gerez le lieu de la seance. Les donnees meteo seront disponibles ulterieurement.
+              </p>
+
+              <div className="space-y-4">
+                {/* Lieu */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Lieu de la seance
+                  </label>
+                  <LocationPicker
+                    value={editLocation}
+                    onChange={setEditLocation}
+                  />
+                </div>
+
+                {/* Placeholder pour meteo future */}
+                <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center">
+                  <svg className="mx-auto h-10 w-10 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                  </svg>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Les donnees meteo et autres informations seront disponibles ici
+                  </p>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowDataModal(false)}
+                  disabled={modalSaving}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={saveData}
+                  disabled={modalSaving}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 flex items-center"
                 >
                   {modalSaving ? (
                     <>
