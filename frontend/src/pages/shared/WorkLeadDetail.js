@@ -4,7 +4,7 @@ import CoachLayout from '../../components/CoachLayout'
 import NavigantLayout from '../../components/NavigantLayout'
 
 function WorkLeadDetail() {
-  const { workLeadId } = useParams()
+  const { workLeadId, groupId, projectId } = useParams()
   const navigate = useNavigate()
   const { isCoach } = useAuth()
 

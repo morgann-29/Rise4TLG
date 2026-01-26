@@ -132,7 +132,7 @@ files_reference (partage de fichiers entre entités)
 | Admin | 1 | Accès total, gestion users, types référentiels |
 | Super Coach | 2 | Gestion groupes, projets, modèles axes |
 | Coach | 3 | CRUD sur ses groupes assignés + sessions/axes des projets du groupe |
-| Navigant | 4 | Accès à son projet uniquement |
+| Navigant | 4 | Accès à ses projets (peut en avoir plusieurs) |
 
 ## Conventions
 
@@ -217,17 +217,23 @@ cd frontend && npm start
 - `GET /api/coach/work-lead-models` - Modèles d'axes disponibles pour import
 
 ### Navigant (type_profile_id = 4)
-- `GET /api/navigant/project` - Mon projet
-- `GET/POST/PUT/DELETE /api/navigant/sessions` - Mes sessions
-- `GET /api/navigant/sessions/{id}` - Détail session basique
-- `GET /api/navigant/sessions/{id}/detail` - Session complète (session_master, équipage, work_leads)
-- `GET /api/navigant/sessions/{id}/work-leads` - Work leads associés à la session
-- `PUT /api/navigant/sessions/{id}/work-leads/{work_lead_id}` - Modifier status work lead session
-- `GET/POST/PUT/DELETE /api/navigant/work-leads` - Mes axes de travail
-- `GET /api/navigant/work-leads/{id}` - Détail axe
-- `POST /api/navigant/work-leads/{id}/archive` - Archiver axe
-- `POST /api/navigant/work-leads/{id}/unarchive` - Désarchiver axe
-- `POST /api/navigant/work-leads/{id}/restore` - Restaurer axe supprimé
+- `GET /api/navigant/projects` - Liste tous mes projets
+- `GET /api/navigant/projects/{project_id}/sessions` - Sessions du projet
+- `POST /api/navigant/projects/{project_id}/sessions` - Créer session
+- `GET /api/navigant/projects/{project_id}/sessions/{session_id}` - Détail session basique
+- `PUT /api/navigant/projects/{project_id}/sessions/{session_id}` - Modifier session
+- `DELETE /api/navigant/projects/{project_id}/sessions/{session_id}` - Supprimer session
+- `GET /api/navigant/projects/{project_id}/sessions/{session_id}/detail` - Session complète (session_master, équipage, work_leads)
+- `GET /api/navigant/projects/{project_id}/sessions/{session_id}/work-leads` - Work leads associés à la session
+- `PUT /api/navigant/projects/{project_id}/sessions/{session_id}/work-leads/{work_lead_id}` - Modifier status work lead session
+- `GET /api/navigant/projects/{project_id}/work-leads` - Axes de travail du projet
+- `POST /api/navigant/projects/{project_id}/work-leads` - Créer axe
+- `GET /api/navigant/projects/{project_id}/work-leads/{work_lead_id}` - Détail axe
+- `PUT /api/navigant/projects/{project_id}/work-leads/{work_lead_id}` - Modifier axe
+- `DELETE /api/navigant/projects/{project_id}/work-leads/{work_lead_id}` - Supprimer axe
+- `POST /api/navigant/projects/{project_id}/work-leads/{work_lead_id}/archive` - Archiver axe
+- `POST /api/navigant/projects/{project_id}/work-leads/{work_lead_id}/unarchive` - Désarchiver axe
+- `POST /api/navigant/projects/{project_id}/work-leads/{work_lead_id}/restore` - Restaurer axe supprimé
 - `GET /api/navigant/type-seances` - Types de séances pour dropdown
 - `GET /api/navigant/work-lead-types` - Types d'axes pour dropdown
 
@@ -285,7 +291,7 @@ cd frontend && npm start
 - `AdminLayout` - Navigation admin (Users, Types référentiels)
 - `SuperCoachLayout` - Navigation super coach (Dashboard, Projects, Groups, Models)
 - `CoachLayout` - Navigation coach avec menus dynamiques par groupe assigné
-- `NavigantLayout` - Navigation navigant (Dashboard, Mon Projet avec sous-menus Séances/Axes)
+- `NavigantLayout` - Navigation navigant (Dashboard, Mes Projets avec sous-menus Séances/Axes par projet)
 
 ## Routes Frontend
 
@@ -317,10 +323,10 @@ cd frontend && npm start
 /coach/groups/:groupId/projects/:projectId/work-leads
 /coach/groups/:groupId/projects/:projectId/work-leads/:workLeadId
 /navigant
-/navigant/project/sessions
-/navigant/project/work-leads
-/shared/sessions/:sessionId    # Coach + Navigant (layout dynamique)
-/shared/work-leads/:workLeadId # Coach + Navigant (layout dynamique)
+/navigant/projects/:projectId/sessions
+/navigant/projects/:projectId/sessions/:sessionId
+/navigant/projects/:projectId/work-leads
+/navigant/projects/:projectId/work-leads/:workLeadId
 ```
 
 ## Notes techniques

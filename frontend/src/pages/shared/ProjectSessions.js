@@ -10,8 +10,8 @@ function ProjectSessions() {
   const { groupId, projectId } = useParams()
   const navigate = useNavigate()
 
-  // Determine context: coach (with groupId/projectId) or navigant (without)
-  const isCoachContext = !!groupId && !!projectId
+  // Determine context: coach (with groupId) or navigant (projectId only)
+  const isCoachContext = !!groupId
 
   const [project, setProject] = useState(null)
   const [group, setGroup] = useState(null)
@@ -52,13 +52,13 @@ function ProjectSessions() {
         setSessions(sessionsData || [])
         setTypeSeances(typesData || [])
       } else {
-        // Navigant context: fetch from navigant endpoints
-        const [projectData, sessionsData, typesData] = await Promise.all([
-          navigantService.getMyProject(),
-          navigantService.getSessions(showDeleted),
+        // Navigant context: fetch from navigant endpoints with projectId
+        const [sessionsData, typesData] = await Promise.all([
+          navigantService.getSessions(projectId, showDeleted),
           navigantService.getTypeSeances()
         ])
-        setProject(projectData)
+        // Set project info from projectId (we don't have a separate getProject endpoint, use placeholder)
+        setProject({ id: projectId, name: 'Mon Projet' })
         setSessions(sessionsData || [])
         setTypeSeances(typesData || [])
       }
@@ -92,9 +92,9 @@ function ProjectSessions() {
         }
       } else {
         if (editingItem) {
-          await navigantService.updateSession(editingItem.id, submitData)
+          await navigantService.updateSession(projectId, editingItem.id, submitData)
         } else {
-          await navigantService.createSession(submitData)
+          await navigantService.createSession(projectId, submitData)
         }
       }
       setShowModal(false)
@@ -114,7 +114,7 @@ function ProjectSessions() {
       if (isCoachContext) {
         await coachService.deleteProjectSession(groupId, projectId, item.id)
       } else {
-        await navigantService.deleteSession(item.id)
+        await navigantService.deleteSession(projectId, item.id)
       }
       await loadData()
     } catch (err) {
@@ -164,7 +164,7 @@ function ProjectSessions() {
       if (isCoachContext) {
         navigate(`/coach/groups/${groupId}/projects/${projectId}/sessions/${item.id}`)
       } else {
-        navigate(`/shared/sessions/${item.id}`)
+        navigate(`/navigant/projects/${projectId}/sessions/${item.id}`)
       }
     }
   }

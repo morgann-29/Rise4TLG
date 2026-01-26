@@ -383,7 +383,7 @@ function App() {
           />
 
           <Route
-            path="/navigant/project/sessions"
+            path="/navigant/projects/:projectId/sessions"
             element={
               <OperatorRoute>
                 <ProjectSessions />
@@ -392,7 +392,16 @@ function App() {
           />
 
           <Route
-            path="/navigant/project/work-leads"
+            path="/navigant/projects/:projectId/sessions/:sessionId"
+            element={
+              <OperatorRoute>
+                <SessionDetail />
+              </OperatorRoute>
+            }
+          />
+
+          <Route
+            path="/navigant/projects/:projectId/work-leads"
             element={
               <OperatorRoute>
                 <ProjectWorkLeads />
@@ -400,22 +409,12 @@ function App() {
             }
           />
 
-          {/* Shared routes (accessible by Coach + Navigant) */}
           <Route
-            path="/shared/sessions/:sessionId"
+            path="/navigant/projects/:projectId/work-leads/:workLeadId"
             element={
-              <SharedRoute>
-                <SessionDetail />
-              </SharedRoute>
-            }
-          />
-
-          <Route
-            path="/shared/work-leads/:workLeadId"
-            element={
-              <SharedRoute>
+              <OperatorRoute>
                 <WorkLeadDetail />
-              </SharedRoute>
+              </OperatorRoute>
             }
           />
 

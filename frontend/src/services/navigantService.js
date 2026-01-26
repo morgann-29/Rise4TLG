@@ -2,67 +2,73 @@ import api from './api'
 
 export const navigantService = {
   // ============================================
-  // PROJECT
+  // PROJECTS
   // ============================================
 
+  async getMyProjects() {
+    const response = await api.get('/api/navigant/projects')
+    return response.data
+  },
+
+  // Deprecated: utiliser getMyProjects()
   async getMyProject() {
     const response = await api.get('/api/navigant/project')
     return response.data
   },
 
   // ============================================
-  // SESSIONS (session du projet, sans session_master)
+  // SESSIONS (avec projectId)
   // ============================================
 
-  async getSessions(includeDeleted = false) {
-    const response = await api.get('/api/navigant/sessions', {
+  async getSessions(projectId, includeDeleted = false) {
+    const response = await api.get(`/api/navigant/projects/${projectId}/sessions`, {
       params: { include_deleted: includeDeleted }
     })
     return response.data
   },
 
-  async getSession(sessionId) {
-    const response = await api.get(`/api/navigant/sessions/${sessionId}`)
+  async getSession(projectId, sessionId) {
+    const response = await api.get(`/api/navigant/projects/${projectId}/sessions/${sessionId}`)
     return response.data
   },
 
-  async createSession(data) {
-    const response = await api.post('/api/navigant/sessions', data)
+  async createSession(projectId, data) {
+    const response = await api.post(`/api/navigant/projects/${projectId}/sessions`, data)
     return response.data
   },
 
-  async updateSession(sessionId, data) {
-    const response = await api.put(`/api/navigant/sessions/${sessionId}`, data)
+  async updateSession(projectId, sessionId, data) {
+    const response = await api.put(`/api/navigant/projects/${projectId}/sessions/${sessionId}`, data)
     return response.data
   },
 
-  async deleteSession(sessionId) {
-    await api.delete(`/api/navigant/sessions/${sessionId}`)
+  async deleteSession(projectId, sessionId) {
+    await api.delete(`/api/navigant/projects/${projectId}/sessions/${sessionId}`)
   },
 
   // Session detail (avec session_master, crew, work_leads)
-  async getSessionDetail(sessionId) {
-    const response = await api.get(`/api/navigant/sessions/${sessionId}/detail`)
+  async getSessionDetail(projectId, sessionId) {
+    const response = await api.get(`/api/navigant/projects/${projectId}/sessions/${sessionId}/detail`)
     return response.data
   },
 
   // Session work leads
-  async getSessionWorkLeads(sessionId) {
-    const response = await api.get(`/api/navigant/sessions/${sessionId}/work-leads`)
+  async getSessionWorkLeads(projectId, sessionId) {
+    const response = await api.get(`/api/navigant/projects/${projectId}/sessions/${sessionId}/work-leads`)
     return response.data
   },
 
-  async updateSessionWorkLead(sessionId, workLeadId, status) {
-    const response = await api.put(`/api/navigant/sessions/${sessionId}/work-leads/${workLeadId}`, { status })
+  async updateSessionWorkLead(projectId, sessionId, workLeadId, status) {
+    const response = await api.put(`/api/navigant/projects/${projectId}/sessions/${sessionId}/work-leads/${workLeadId}`, { status })
     return response.data
   },
 
   // ============================================
-  // WORK LEADS (work_lead du projet, sans work_lead_master)
+  // WORK LEADS (avec projectId)
   // ============================================
 
-  async getWorkLeads(includeDeleted = false, includeArchived = false) {
-    const response = await api.get('/api/navigant/work-leads', {
+  async getWorkLeads(projectId, includeDeleted = false, includeArchived = false) {
+    const response = await api.get(`/api/navigant/projects/${projectId}/work-leads`, {
       params: {
         include_deleted: includeDeleted,
         include_archived: includeArchived
@@ -71,35 +77,35 @@ export const navigantService = {
     return response.data
   },
 
-  async getWorkLead(workLeadId) {
-    const response = await api.get(`/api/navigant/work-leads/${workLeadId}`)
+  async getWorkLead(projectId, workLeadId) {
+    const response = await api.get(`/api/navigant/projects/${projectId}/work-leads/${workLeadId}`)
     return response.data
   },
 
-  async createWorkLead(data) {
-    const response = await api.post('/api/navigant/work-leads', data)
+  async createWorkLead(projectId, data) {
+    const response = await api.post(`/api/navigant/projects/${projectId}/work-leads`, data)
     return response.data
   },
 
-  async updateWorkLead(workLeadId, data) {
-    const response = await api.put(`/api/navigant/work-leads/${workLeadId}`, data)
+  async updateWorkLead(projectId, workLeadId, data) {
+    const response = await api.put(`/api/navigant/projects/${projectId}/work-leads/${workLeadId}`, data)
     return response.data
   },
 
-  async deleteWorkLead(workLeadId) {
-    await api.delete(`/api/navigant/work-leads/${workLeadId}`)
+  async deleteWorkLead(projectId, workLeadId) {
+    await api.delete(`/api/navigant/projects/${projectId}/work-leads/${workLeadId}`)
   },
 
-  async archiveWorkLead(workLeadId) {
-    await api.post(`/api/navigant/work-leads/${workLeadId}/archive`)
+  async archiveWorkLead(projectId, workLeadId) {
+    await api.post(`/api/navigant/projects/${projectId}/work-leads/${workLeadId}/archive`)
   },
 
-  async unarchiveWorkLead(workLeadId) {
-    await api.post(`/api/navigant/work-leads/${workLeadId}/unarchive`)
+  async unarchiveWorkLead(projectId, workLeadId) {
+    await api.post(`/api/navigant/projects/${projectId}/work-leads/${workLeadId}/unarchive`)
   },
 
-  async restoreWorkLead(workLeadId) {
-    await api.post(`/api/navigant/work-leads/${workLeadId}/restore`)
+  async restoreWorkLead(projectId, workLeadId) {
+    await api.post(`/api/navigant/projects/${projectId}/work-leads/${workLeadId}/restore`)
   },
 
   // ============================================

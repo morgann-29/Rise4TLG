@@ -60,7 +60,7 @@ function SessionDetail() {
       if (isCoach && groupId && projectId) {
         sessionData = await coachService.getProjectSessionDetail(groupId, projectId, sessionId)
       } else {
-        sessionData = await navigantService.getSessionDetail(sessionId)
+        sessionData = await navigantService.getSessionDetail(projectId, sessionId)
       }
       setSession(sessionData)
       setError(null)
@@ -108,7 +108,7 @@ function SessionDetail() {
         content
       })
     } else {
-      await navigantService.updateSession(sessionId, {
+      await navigantService.updateSession(projectId, sessionId, {
         name: session.name,
         type_seance_id: session.type_seance_id,
         date_start: session.date_start,
@@ -146,7 +146,7 @@ function SessionDetail() {
           content: session.content
         })
       } else {
-        await navigantService.updateSession(sessionId, {
+        await navigantService.updateSession(projectId, sessionId, {
           name: session.name,
           type_seance_id: session.type_seance_id,
           date_start: editDateStart || null,
@@ -186,7 +186,7 @@ function SessionDetail() {
           content: session.content
         })
       } else {
-        await navigantService.updateSession(sessionId, {
+        await navigantService.updateSession(projectId, sessionId, {
           name: session.name,
           type_seance_id: session.type_seance_id,
           date_start: session.date_start,
@@ -215,7 +215,7 @@ function SessionDetail() {
       if (isCoach && groupId && projectId) {
         workLeads = await coachService.getProjectWorkLeads(groupId, projectId, false, false)
       } else {
-        workLeads = await navigantService.getWorkLeads(false, false)
+        workLeads = await navigantService.getWorkLeads(projectId, false, false)
       }
       setAllProjectWorkLeads(workLeads)
       // Initialize pending statuses from current session data
@@ -255,7 +255,7 @@ function SessionDetail() {
         if (isCoach && groupId && projectId) {
           promises.push(coachService.updateProjectSessionWorkLead(groupId, projectId, sessionId, wlId, status))
         } else {
-          promises.push(navigantService.updateSessionWorkLead(sessionId, wlId, status))
+          promises.push(navigantService.updateSessionWorkLead(projectId, sessionId, wlId, status))
         }
       }
 

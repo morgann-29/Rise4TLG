@@ -13,26 +13,40 @@ function NavigantLayout({ children }) {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const userMenuRef = useRef(null)
 
-  // Projet du navigant
-  const [project, setProject] = useState(null)
-  const [projectLoading, setProjectLoading] = useState(true)
-  const [projectMenuExpanded, setProjectMenuExpanded] = useState(true)
+  // Projets du navigant (multi-projets)
+  const [projects, setProjects] = useState([])
+  const [projectsLoading, setProjectsLoading] = useState(true)
+  const [expandedProjects, setExpandedProjects] = useState({})
 
-  // Charger le projet du navigant
+  // Charger les projets du navigant
   useEffect(() => {
-    const loadProject = async () => {
+    const loadProjects = async () => {
       try {
-        setProjectLoading(true)
-        const data = await navigantService.getMyProject()
-        setProject(data)
+        setProjectsLoading(true)
+        const data = await navigantService.getMyProjects()
+        setProjects(data || [])
+
+        // Auto-expand projet actif base sur l'URL
+        const match = location.pathname.match(/\/navigant\/projects\/([^/]+)/)
+        if (match) {
+          setExpandedProjects(prev => ({ ...prev, [match[1]]: true }))
+        }
       } catch (err) {
-        console.error('Erreur chargement projet:', err)
+        console.error('Erreur chargement projets:', err)
       } finally {
-        setProjectLoading(false)
+        setProjectsLoading(false)
       }
     }
-    loadProject()
-  }, [])
+    loadProjects()
+  }, [location.pathname])
+
+  // Toggle projet expanded
+  const toggleProject = (projectId) => {
+    setExpandedProjects(prev => ({
+      ...prev,
+      [projectId]: !prev[projectId]
+    }))
+  }
 
   // Fermer le menu utilisateur si clic en dehors
   useEffect(() => {
@@ -85,7 +99,7 @@ function NavigantLayout({ children }) {
 
   // Verifier si un lien est actif
   const isActive = (path) => location.pathname === path
-  const isProjectSectionActive = () => location.pathname.includes('/navigant/project')
+  const isProjectActive = (projectId) => location.pathname.includes(`/navigant/projects/${projectId}`)
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -126,28 +140,33 @@ function NavigantLayout({ children }) {
           {/* Separator */}
           <div className="border-t border-gray-200 dark:border-gray-700 my-4"></div>
 
+          {/* Section label */}
+          <div className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            Mes Projets
+          </div>
+
           {/* Loading */}
-          {projectLoading && (
+          {projectsLoading && (
             <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
               Chargement...
             </div>
           )}
 
-          {/* No project */}
-          {!projectLoading && !project && (
+          {/* No projects */}
+          {!projectsLoading && projects.length === 0 && (
             <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
               Aucun projet associe
             </div>
           )}
 
-          {/* Mon Projet section */}
-          {project && (
-            <div className="space-y-1">
+          {/* Projects list */}
+          {projects.map((project) => (
+            <div key={project.id} className="space-y-1">
               {/* Project header */}
               <button
-                onClick={() => setProjectMenuExpanded(!projectMenuExpanded)}
+                onClick={() => toggleProject(project.id)}
                 className={`flex items-center justify-between w-full px-4 py-2 rounded-md text-left ${
-                  isProjectSectionActive()
+                  isProjectActive(project.id)
                     ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                     : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
                 }`}
@@ -159,7 +178,7 @@ function NavigantLayout({ children }) {
                   <span className="font-medium truncate max-w-[140px]">{project.name || 'Mon Projet'}</span>
                 </div>
                 <svg
-                  className={`w-4 h-4 transition-transform ${projectMenuExpanded ? 'rotate-180' : ''}`}
+                  className={`w-4 h-4 transition-transform ${expandedProjects[project.id] ? 'rotate-180' : ''}`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -169,13 +188,13 @@ function NavigantLayout({ children }) {
               </button>
 
               {/* Project submenus */}
-              {projectMenuExpanded && (
+              {expandedProjects[project.id] && (
                 <div className="ml-4 pl-4 border-l border-gray-200 dark:border-gray-700 space-y-1">
                   {/* Seances */}
                   <Link
-                    to="/navigant/project/sessions"
+                    to={`/navigant/projects/${project.id}/sessions`}
                     className={`flex items-center px-3 py-2 text-sm rounded-md ${
-                      location.pathname.includes('/navigant/project/sessions')
+                      location.pathname.includes(`/navigant/projects/${project.id}/sessions`)
                         ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
                         : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                     }`}
@@ -189,9 +208,9 @@ function NavigantLayout({ children }) {
 
                   {/* Axes de travail */}
                   <Link
-                    to="/navigant/project/work-leads"
+                    to={`/navigant/projects/${project.id}/work-leads`}
                     className={`flex items-center px-3 py-2 text-sm rounded-md ${
-                      location.pathname.includes('/navigant/project/work-leads')
+                      location.pathname.includes(`/navigant/projects/${project.id}/work-leads`)
                         ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
                         : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                     }`}
@@ -205,7 +224,7 @@ function NavigantLayout({ children }) {
                 </div>
               )}
             </div>
-          )}
+          ))}
         </nav>
       </aside>
 

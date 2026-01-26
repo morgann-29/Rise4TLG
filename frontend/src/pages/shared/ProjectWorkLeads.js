@@ -18,8 +18,8 @@ function ProjectWorkLeads() {
   const { groupId, projectId } = useParams()
   const navigate = useNavigate()
 
-  // Determine context: coach (with groupId/projectId) or navigant (without)
-  const isCoachContext = !!groupId && !!projectId
+  // Determine context: coach (with groupId) or navigant (projectId only)
+  const isCoachContext = !!groupId
 
   const [project, setProject] = useState(null)
   const [group, setGroup] = useState(null)
@@ -59,13 +59,12 @@ function ProjectWorkLeads() {
         setWorkLeads(workLeadsData || [])
         setWorkLeadTypes(typesData || [])
       } else {
-        // Navigant context: fetch from navigant endpoints
-        const [projectData, workLeadsData, typesData] = await Promise.all([
-          navigantService.getMyProject(),
-          navigantService.getWorkLeads(showDeleted, showArchived),
+        // Navigant context: fetch from navigant endpoints with projectId
+        const [workLeadsData, typesData] = await Promise.all([
+          navigantService.getWorkLeads(projectId, showDeleted, showArchived),
           navigantService.getWorkLeadTypes()
         ])
-        setProject(projectData)
+        setProject({ id: projectId, name: 'Mon Projet' })
         setWorkLeads(workLeadsData || [])
         setWorkLeadTypes(typesData || [])
       }
@@ -114,9 +113,9 @@ function ProjectWorkLeads() {
         }
       } else {
         if (editingItem) {
-          await navigantService.updateWorkLead(editingItem.id, submitData)
+          await navigantService.updateWorkLead(projectId, editingItem.id, submitData)
         } else {
-          await navigantService.createWorkLead(submitData)
+          await navigantService.createWorkLead(projectId, submitData)
         }
       }
       setShowModal(false)
@@ -136,7 +135,7 @@ function ProjectWorkLeads() {
       if (isCoachContext) {
         await coachService.deleteProjectWorkLead(groupId, projectId, item.id)
       } else {
-        await navigantService.deleteWorkLead(item.id)
+        await navigantService.deleteWorkLead(projectId, item.id)
       }
       await loadData()
     } catch (err) {
@@ -150,7 +149,7 @@ function ProjectWorkLeads() {
       if (isCoachContext) {
         await coachService.archiveProjectWorkLead(groupId, projectId, item.id)
       } else {
-        await navigantService.archiveWorkLead(item.id)
+        await navigantService.archiveWorkLead(projectId, item.id)
       }
       await loadData()
     } catch (err) {
@@ -164,7 +163,7 @@ function ProjectWorkLeads() {
       if (isCoachContext) {
         await coachService.unarchiveProjectWorkLead(groupId, projectId, item.id)
       } else {
-        await navigantService.unarchiveWorkLead(item.id)
+        await navigantService.unarchiveWorkLead(projectId, item.id)
       }
       await loadData()
     } catch (err) {
@@ -178,7 +177,7 @@ function ProjectWorkLeads() {
       if (isCoachContext) {
         await coachService.restoreProjectWorkLead(groupId, projectId, item.id)
       } else {
-        await navigantService.restoreWorkLead(item.id)
+        await navigantService.restoreWorkLead(projectId, item.id)
       }
       await loadData()
     } catch (err) {
@@ -216,7 +215,7 @@ function ProjectWorkLeads() {
       if (isCoachContext) {
         navigate(`/coach/groups/${groupId}/projects/${projectId}/work-leads/${item.id}`)
       } else {
-        navigate(`/shared/work-leads/${item.id}`)
+        navigate(`/navigant/projects/${projectId}/work-leads/${item.id}`)
       }
     }
   }
