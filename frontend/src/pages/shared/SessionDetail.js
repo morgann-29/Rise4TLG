@@ -38,6 +38,7 @@ function SessionDetail() {
   const [thematiquesModalLoading, setThematiquesModalLoading] = useState(false)
   const [collapsedTypes, setCollapsedTypes] = useState({})
   const [pendingStatuses, setPendingStatuses] = useState({})
+  const [initialStatuses, setInitialStatuses] = useState({})
 
   // Contenu commun states
   const [contenuCommunExpanded, setContenuCommunExpanded] = useState(true)
@@ -219,11 +220,12 @@ function SessionDetail() {
       }
       setAllProjectWorkLeads(workLeads)
       // Initialize pending statuses from current session data
-      const initialStatuses = {}
+      const statuses = {}
       session.work_leads?.forEach(wl => {
-        initialStatuses[wl.work_lead_id] = wl.status
+        statuses[wl.work_lead_id] = wl.status
       })
-      setPendingStatuses(initialStatuses)
+      setInitialStatuses(statuses)
+      setPendingStatuses(statuses)
     } catch (err) {
       console.error('Erreur chargement thematiques:', err)
     } finally {
@@ -256,6 +258,17 @@ function SessionDetail() {
           promises.push(coachService.updateProjectSessionWorkLead(groupId, projectId, sessionId, wlId, status))
         } else {
           promises.push(navigantService.updateSessionWorkLead(projectId, sessionId, wlId, status))
+        }
+      }
+
+      // Delete removed entries (were in initial but not in pending)
+      for (const wlId of Object.keys(initialStatuses)) {
+        if (!(wlId in pendingStatuses)) {
+          if (isCoach && groupId && projectId) {
+            promises.push(coachService.updateProjectSessionWorkLead(groupId, projectId, sessionId, wlId, null))
+          } else {
+            promises.push(navigantService.updateSessionWorkLead(projectId, sessionId, wlId, null))
+          }
         }
       }
 
@@ -628,7 +641,7 @@ function SessionDetail() {
                     {items.map(wl => (
                       <button
                         key={wl.work_lead_id}
-                        onClick={() => navigate(`/shared/work-leads/${wl.work_lead_id}`)}
+                        onClick={() => navigate(isCoach && groupId ? `/coach/groups/${groupId}/projects/${projectId}/work-leads/${wl.work_lead_id}` : `/navigant/projects/${projectId}/work-leads/${wl.work_lead_id}`)}
                         className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium border cursor-pointer hover:opacity-80 transition-opacity ${getStatusColor(wl.status)}`}
                       >
                         {/* Icon for master link - before name */}
@@ -963,7 +976,7 @@ function SessionDetail() {
                             {items.map(wl => (
                               <div key={wl.id} className="px-4 py-3 flex items-center justify-between">
                                 <button
-                                  onClick={() => { setShowThematiquesModal(false); navigate(`/shared/work-leads/${wl.id}`) }}
+                                  onClick={() => { setShowThematiquesModal(false); navigate(isCoach && groupId ? `/coach/groups/${groupId}/projects/${projectId}/work-leads/${wl.id}` : `/navigant/projects/${projectId}/work-leads/${wl.id}`) }}
                                   className="text-sm text-gray-900 dark:text-white font-medium hover:text-blue-600 dark:hover:text-blue-400 transition-colors text-left"
                                 >
                                   {wl.name}

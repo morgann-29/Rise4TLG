@@ -88,7 +88,7 @@ class SessionWorkLeadItem(BaseModel):
     work_lead_type_id: Optional[str] = None
     work_lead_type_name: Optional[str] = None
     work_lead_master_id: Optional[str] = None
-    status: str
+    status: Optional[str] = None
     override_master: Optional[bool] = None
 
 
@@ -764,7 +764,7 @@ async def get_session_work_leads(
 
 
 class SessionWorkLeadUpdate(BaseModel):
-    status: str  # TODO, WORKING, DANGER, OK
+    status: Optional[str] = None  # TODO, WORKING, DANGER, OK ou null pour supprimer
 
 
 @router.put("/sessions/{session_id}/work-leads/{work_lead_id}", response_model=SessionWorkLeadItem)
@@ -796,6 +796,24 @@ async def update_session_work_lead(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Acces refuse a cet axe de travail"
+            )
+
+        # Si status est null, supprimer l'entree
+        if data.status is None:
+            supabase_admin.table("session_work_lead")\
+                .delete()\
+                .eq("session_id", session_id)\
+                .eq("work_lead_id", work_lead_id)\
+                .execute()
+            return SessionWorkLeadItem(
+                id=f"{session_id}_{work_lead_id}",
+                work_lead_id=work_lead_id,
+                work_lead_name="",
+                work_lead_type_id=None,
+                work_lead_type_name=None,
+                work_lead_master_id=None,
+                status=None,
+                override_master=None
             )
 
         # Valider le status
@@ -1717,6 +1735,24 @@ async def update_project_session_work_lead(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Acces refuse a cet axe de travail"
+            )
+
+        # Si status est null, supprimer l'entree
+        if data.status is None:
+            supabase_admin.table("session_work_lead")\
+                .delete()\
+                .eq("session_id", session_id)\
+                .eq("work_lead_id", work_lead_id)\
+                .execute()
+            return SessionWorkLeadItem(
+                id=f"{session_id}_{work_lead_id}",
+                work_lead_id=work_lead_id,
+                work_lead_name="",
+                work_lead_type_id=None,
+                work_lead_type_name=None,
+                work_lead_master_id=None,
+                status=None,
+                override_master=None
             )
 
         # Valider le status

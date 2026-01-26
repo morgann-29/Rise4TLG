@@ -1406,7 +1406,7 @@ class CoachSessionWorkLeadItem(BaseModel):
     work_lead_type_id: Optional[str] = None
     work_lead_type_name: Optional[str] = None
     work_lead_master_id: Optional[str] = None
-    status: str
+    status: Optional[str] = None
     override_master: Optional[bool] = None
 
 
@@ -2046,7 +2046,7 @@ async def get_project_session_work_leads(
 
 
 class ProjectSessionWorkLeadUpdate(BaseModel):
-    status: str  # TODO, WORKING, DANGER, OK
+    status: Optional[str] = None  # TODO, WORKING, DANGER, OK ou null pour supprimer
 
 
 @router.put("/groups/{group_id}/projects/{project_id}/sessions/{session_id}/work-leads/{work_lead_id}", response_model=CoachSessionWorkLeadItem)
@@ -2100,6 +2100,25 @@ async def update_project_session_work_lead(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Axe de travail non trouve"
+            )
+
+        # Si status est null, supprimer l'entree
+        if data.status is None:
+            supabase_admin.table("session_work_lead")\
+                .delete()\
+                .eq("session_id", session_id)\
+                .eq("work_lead_id", work_lead_id)\
+                .execute()
+            # Retourner un objet vide pour indiquer la suppression
+            return CoachSessionWorkLeadItem(
+                id=f"{session_id}_{work_lead_id}",
+                work_lead_id=work_lead_id,
+                work_lead_name="",
+                work_lead_type_id=None,
+                work_lead_type_name=None,
+                work_lead_master_id=None,
+                status=None,
+                override_master=None
             )
 
         # Valider le status

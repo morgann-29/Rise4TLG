@@ -206,7 +206,7 @@ cd frontend && npm start
 - `GET/POST/PUT/DELETE /api/coach/groups/{id}/projects/{project_id}/sessions` - Sessions du projet
 - `GET /api/coach/groups/{id}/projects/{project_id}/sessions/{session_id}/detail` - Session complète (session_master, équipage, work_leads)
 - `GET /api/coach/groups/{id}/projects/{project_id}/sessions/{session_id}/work-leads` - Work leads de la session
-- `PUT /api/coach/groups/{id}/projects/{project_id}/sessions/{session_id}/work-leads/{work_lead_id}` - Modifier status work lead
+- `PUT /api/coach/groups/{id}/projects/{project_id}/sessions/{session_id}/work-leads/{work_lead_id}` - Modifier status work lead (status null = supprimer)
 - `GET/POST/PUT/DELETE /api/coach/groups/{id}/projects/{project_id}/work-leads` - Axes de travail du projet
 - `POST /api/coach/groups/{id}/projects/{project_id}/work-leads/{work_lead_id}/archive` - Archiver axe projet
 - `POST /api/coach/groups/{id}/projects/{project_id}/work-leads/{work_lead_id}/unarchive` - Désarchiver axe projet
@@ -225,7 +225,7 @@ cd frontend && npm start
 - `DELETE /api/navigant/projects/{project_id}/sessions/{session_id}` - Supprimer session
 - `GET /api/navigant/projects/{project_id}/sessions/{session_id}/detail` - Session complète (session_master, équipage, work_leads)
 - `GET /api/navigant/projects/{project_id}/sessions/{session_id}/work-leads` - Work leads associés à la session
-- `PUT /api/navigant/projects/{project_id}/sessions/{session_id}/work-leads/{work_lead_id}` - Modifier status work lead session
+- `PUT /api/navigant/projects/{project_id}/sessions/{session_id}/work-leads/{work_lead_id}` - Modifier status work lead session (status null = supprimer)
 - `GET /api/navigant/projects/{project_id}/work-leads` - Axes de travail du projet
 - `POST /api/navigant/projects/{project_id}/work-leads` - Créer axe
 - `GET /api/navigant/projects/{project_id}/work-leads/{work_lead_id}` - Détail axe
