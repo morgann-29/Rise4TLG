@@ -48,18 +48,22 @@ frontend/
       shared/             # Composants partagés (ConfirmModal)
     contexts/        # AuthContext, ThemeContext
     pages/
-      # Admin
-      Users.js, TypeSupports.js, TypeSeances.js, TypeWorkLeads.js
-      # Super Coach
-      SuperCoachDashboard.js, Projects.js, ProjectDetails.js
-      Groups.js, GroupDetails.js
-      WorkLeadMasterModels.js, WorkLeadMasterDetail.js
-      SessionMasterModels.js, SessionMasterDetail.js
-      # Coach (dans pages/coach/)
-      CoachDashboard.js, GroupProgrammation.js
-      GroupSessions.js, GroupSessionDetail.js
-      GroupWorkLeads.js, GroupWorkLeadDetail.js
-      GroupProjects.js
+      admin/               # Pages Admin
+        AdminDashboard.js, Users.js
+        TypeSupports.js, TypeSeances.js, TypeWorkLeads.js
+      super-coach/         # Pages Super Coach
+        SuperCoachDashboard.js
+        Projects.js, ProjectDetails.js
+        Groups.js, GroupDetails.js
+        WorkLeadMasterModels.js, WorkLeadMasterModelDetail.js
+        SessionMasterModels.js, SessionMasterModelDetail.js
+      coach/               # Pages Coach
+        CoachDashboard.js, GroupProgrammation.js
+        GroupSessions.js, GroupSessionDetail.js
+        GroupWorkLeads.js, GroupWorkLeadDetail.js
+        GroupProjects.js
+      navigant/            # Pages Navigant
+        NavigantDashboard.js
     services/
       api.js              # Config Axios
       adminService.js     # API admin

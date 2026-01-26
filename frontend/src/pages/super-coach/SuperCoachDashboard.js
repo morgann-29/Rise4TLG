@@ -1,4 +1,4 @@
-import SuperCoachLayout from '../components/SuperCoachLayout'
+import SuperCoachLayout from '../../components/SuperCoachLayout'
 
 function SuperCoachDashboard() {
   return (

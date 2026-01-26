@@ -1,9 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import SuperCoachLayout from '../components/SuperCoachLayout'
-import { projectService } from '../services/projectService'
+import SuperCoachLayout from '../../components/SuperCoachLayout'
+import { workLeadMasterService } from '../../services/workLeadMasterService'
 
-function Projects() {
+// Status labels and colors
+const STATUS_CONFIG = {
+  NEW: { label: 'Nouveau', bgClass: 'bg-purple-100 dark:bg-purple-900', textClass: 'text-purple-800 dark:text-purple-200' },
+  TODO: { label: 'A travailler', bgClass: 'bg-gray-100 dark:bg-gray-700', textClass: 'text-gray-800 dark:text-gray-200' },
+  WORKING: { label: 'En cours', bgClass: 'bg-blue-100 dark:bg-blue-900', textClass: 'text-blue-800 dark:text-blue-200' },
+  DANGER: { label: 'Danger', bgClass: 'bg-red-100 dark:bg-red-900', textClass: 'text-red-800 dark:text-red-200' },
+  OK: { label: 'Valide', bgClass: 'bg-green-100 dark:bg-green-900', textClass: 'text-green-800 dark:text-green-200' }
+}
+
+function WorkLeadMasterModels() {
   const navigate = useNavigate()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -12,31 +21,29 @@ function Projects() {
   const [editingItem, setEditingItem] = useState(null)
   const [formData, setFormData] = useState({
     name: '',
-    profile_id: '',
-    type_support_id: '',
-    location: null
+    work_lead_type_id: ''
   })
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError] = useState(null)
   const [showDeleted, setShowDeleted] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
 
   // Listes pour les dropdowns
-  const [navigants, setNavigants] = useState([])
-  const [typeSupports, setTypeSupports] = useState([])
+  const [workLeadTypes, setWorkLeadTypes] = useState([])
 
   useEffect(() => {
     loadItems()
     loadDropdowns()
-  }, [showDeleted])
+  }, [showDeleted, showArchived])
 
   const loadItems = async () => {
     try {
       setLoading(true)
-      const data = await projectService.getProjects(showDeleted)
+      const data = await workLeadMasterService.getModels(showDeleted, showArchived)
       setItems(data || [])
       setError(null)
     } catch (err) {
-      setError('Erreur lors du chargement des projets')
+      setError('Erreur lors du chargement des modeles')
       console.error(err)
     } finally {
       setLoading(false)
@@ -45,12 +52,8 @@ function Projects() {
 
   const loadDropdowns = async () => {
     try {
-      const [navigantsData, typeSupportsData] = await Promise.all([
-        projectService.getNavigants(),
-        projectService.getTypeSupports()
-      ])
-      setNavigants(navigantsData || [])
-      setTypeSupports(typeSupportsData || [])
+      const typesData = await workLeadMasterService.getWorkLeadTypes()
+      setWorkLeadTypes(typesData || [])
     } catch (err) {
       console.error('Erreur chargement dropdowns:', err)
     }
@@ -63,17 +66,13 @@ function Projects() {
     try {
       const submitData = {
         name: formData.name,
-        profile_id: formData.profile_id,
-        type_support_id: parseInt(formData.type_support_id),
-        location: formData.location
+        work_lead_type_id: formData.work_lead_type_id
       }
 
       if (editingItem) {
-        // En edition, on ne peut pas changer le navigant
-        delete submitData.profile_id
-        await projectService.updateProject(editingItem.id, submitData)
+        await workLeadMasterService.updateModel(editingItem.id, submitData)
       } else {
-        await projectService.createProject(submitData)
+        await workLeadMasterService.createModel(submitData)
       }
       setShowModal(false)
       setEditingItem(null)
@@ -87,9 +86,9 @@ function Projects() {
   }
 
   const handleDelete = async (item) => {
-    if (!window.confirm(`Supprimer le projet "${item.name}" ?`)) return
+    if (!window.confirm(`Supprimer le modele "${item.name}" ?`)) return
     try {
-      await projectService.deleteProject(item.id)
+      await workLeadMasterService.deleteModel(item.id)
       await loadItems()
     } catch (err) {
       alert(err.response?.data?.detail || 'Erreur lors de la suppression')
@@ -98,19 +97,35 @@ function Projects() {
 
   const handleRestore = async (item) => {
     try {
-      await projectService.restoreProject(item.id)
+      await workLeadMasterService.restoreModel(item.id)
       await loadItems()
     } catch (err) {
       alert(err.response?.data?.detail || 'Erreur lors de la restauration')
     }
   }
 
+  const handleArchive = async (item) => {
+    try {
+      await workLeadMasterService.archiveModel(item.id)
+      await loadItems()
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Erreur lors de l\'archivage')
+    }
+  }
+
+  const handleUnarchive = async (item) => {
+    try {
+      await workLeadMasterService.unarchiveModel(item.id)
+      await loadItems()
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Erreur lors du desarchivage')
+    }
+  }
+
   const resetForm = () => {
     setFormData({
       name: '',
-      profile_id: '',
-      type_support_id: '',
-      location: null
+      work_lead_type_id: ''
     })
   }
 
@@ -121,28 +136,20 @@ function Projects() {
     setShowModal(true)
   }
 
-  const openEditModal = (item) => {
+  const openEditModal = (item, e) => {
+    e.stopPropagation()
     setEditingItem(item)
     setFormData({
       name: item.name,
-      profile_id: item.profile_id,
-      type_support_id: item.type_support_id.toString(),
-      location: item.location
+      work_lead_type_id: item.work_lead_type_id || ''
     })
     setActionError(null)
     setShowModal(true)
   }
 
-  const getNavigantDisplay = (navigant) => {
-    if (!navigant) return '-'
-    const name = [navigant.user_first_name, navigant.user_last_name].filter(Boolean).join(' ')
-    if (name) return name
-    return navigant.user_email || '-'
-  }
-
   const handleRowClick = (item) => {
     if (!item.is_deleted) {
-      navigate(`/super-coach/projects/${item.id}`)
+      navigate(`/super-coach/work-lead-models/${item.id}`)
     }
   }
 
@@ -161,10 +168,24 @@ function Projects() {
       <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Projets
-          </h1>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              Modeles Axes de Travail
+            </h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Templates d'axes de travail utilisables dans les groupes
+            </p>
+          </div>
           <div className="flex items-center space-x-4">
+            <label className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+              <input
+                type="checkbox"
+                checked={showArchived}
+                onChange={(e) => setShowArchived(e.target.checked)}
+                className="mr-2 rounded border-gray-300 dark:border-gray-600"
+              />
+              Archives
+            </label>
             <label className="flex items-center text-sm text-gray-600 dark:text-gray-400">
               <input
                 type="checkbox"
@@ -172,7 +193,7 @@ function Projects() {
                 onChange={(e) => setShowDeleted(e.target.checked)}
                 className="mr-2 rounded border-gray-300 dark:border-gray-600"
               />
-              Afficher supprimes
+              Supprimes
             </label>
             <button
               onClick={openCreateModal}
@@ -181,7 +202,7 @@ function Projects() {
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
-              Nouveau projet
+              Nouveau modele
             </button>
           </div>
         </div>
@@ -201,16 +222,16 @@ function Projects() {
                   Nom
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Navigant
+                  Type
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Type de support
+                  Statut courant
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Statut
+                  Etat
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Cree le
+                  Modifie le
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Actions
@@ -225,24 +246,45 @@ function Projects() {
                   onClick={() => handleRowClick(item)}
                 >
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900 dark:text-white">
-                      {item.name}
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0 h-10 w-10 bg-indigo-100 dark:bg-indigo-900 rounded-lg flex items-center justify-center">
+                        <svg className="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                      </div>
+                      <div className="ml-4">
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                          {item.name}
+                        </div>
+                      </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      {getNavigantDisplay(item.navigant)}
-                    </div>
+                    {item.work_lead_type_name ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200">
+                        {item.work_lead_type_name}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 dark:text-gray-500">-</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
-                      {item.type_support_name || '-'}
-                    </span>
+                    {item.current_status ? (
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_CONFIG[item.current_status]?.bgClass || ''} ${STATUS_CONFIG[item.current_status]?.textClass || ''}`}>
+                        {STATUS_CONFIG[item.current_status]?.label || item.current_status}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 dark:text-gray-500">-</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {item.is_deleted ? (
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200">
                         Supprime
+                      </span>
+                    ) : item.is_archived ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200">
+                        Archive
                       </span>
                     ) : (
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
@@ -251,7 +293,7 @@ function Projects() {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    {new Date(item.created_at).toLocaleDateString('fr-FR')}
+                    {new Date(item.updated_at).toLocaleDateString('fr-FR')}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex justify-end space-x-2" onClick={(e) => e.stopPropagation()}>
@@ -268,7 +310,7 @@ function Projects() {
                       ) : (
                         <>
                           <button
-                            onClick={() => openEditModal(item)}
+                            onClick={(e) => openEditModal(item, e)}
                             className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300"
                             title="Modifier"
                           >
@@ -276,6 +318,27 @@ function Projects() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                             </svg>
                           </button>
+                          {item.is_archived ? (
+                            <button
+                              onClick={() => handleUnarchive(item)}
+                              className="text-yellow-600 dark:text-yellow-400 hover:text-yellow-900 dark:hover:text-yellow-300"
+                              title="Desarchiver"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                              </svg>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleArchive(item)}
+                              className="text-yellow-600 dark:text-yellow-400 hover:text-yellow-900 dark:hover:text-yellow-300"
+                              title="Archiver"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                              </svg>
+                            </button>
+                          )}
                           <button
                             onClick={() => handleDelete(item)}
                             className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
@@ -293,8 +356,12 @@ function Projects() {
               ))}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan="6" className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
-                    Aucun projet
+                  <td colSpan="6" className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                    <svg className="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <p>Aucun modele d'axe de travail</p>
+                    <p className="text-sm mt-1">Creez votre premier modele pour commencer</p>
                   </td>
                 </tr>
               )}
@@ -310,7 +377,7 @@ function Projects() {
             <div className="fixed inset-0 bg-black opacity-50" onClick={() => setShowModal(false)}></div>
             <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                {editingItem ? 'Modifier le projet' : 'Nouveau projet'}
+                {editingItem ? 'Modifier le modele' : 'Nouveau modele'}
               </h3>
               {actionError && (
                 <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg text-sm">
@@ -320,7 +387,7 @@ function Projects() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Nom du projet *
+                    Nom du modele *
                   </label>
                   <input
                     type="text"
@@ -328,62 +395,24 @@ function Projects() {
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500"
-                    placeholder="Nom du projet"
+                    placeholder="Ex: Competences de base"
                   />
                 </div>
 
-                {!editingItem && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Navigant *
-                    </label>
-                    <select
-                      required
-                      value={formData.profile_id}
-                      onChange={(e) => setFormData({ ...formData, profile_id: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500"
-                    >
-                      <option value="">Selectionner un navigant...</option>
-                      {navigants.map((n) => (
-                        <option key={n.id} value={n.id}>
-                          {getNavigantDisplay(n)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {editingItem && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Navigant
-                    </label>
-                    <input
-                      type="text"
-                      disabled
-                      value={getNavigantDisplay(editingItem.navigant)}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-600 text-gray-500 dark:text-gray-400"
-                    />
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      Le navigant ne peut pas etre modifie
-                    </p>
-                  </div>
-                )}
-
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Type de support *
+                    Type d'axe de travail *
                   </label>
                   <select
                     required
-                    value={formData.type_support_id}
-                    onChange={(e) => setFormData({ ...formData, type_support_id: e.target.value })}
+                    value={formData.work_lead_type_id}
+                    onChange={(e) => setFormData({ ...formData, work_lead_type_id: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500"
                   >
-                    <option value="">Selectionner...</option>
-                    {typeSupports.map((ts) => (
-                      <option key={ts.id} value={ts.id}>
-                        {ts.name}
+                    <option value="">Selectionnez un type</option>
+                    {workLeadTypes.map((type) => (
+                      <option key={type.id} value={type.id}>
+                        {type.name}
                       </option>
                     ))}
                   </select>
@@ -414,4 +443,4 @@ function Projects() {
   )
 }
 
-export default Projects
+export default WorkLeadMasterModels

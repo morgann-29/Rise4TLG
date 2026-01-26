@@ -1,6 +1,6 @@
-import Layout from '../components/Layout'
+import Layout from '../../components/Layout'
 
-function Dashboard() {
+function NavigantDashboard() {
   return (
     <Layout>
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
@@ -15,4 +15,4 @@ function Dashboard() {
   )
 }
 
-export default Dashboard
+export default NavigantDashboard

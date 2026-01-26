@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import SuperCoachLayout from '../components/SuperCoachLayout'
-import { sessionMasterService } from '../services/sessionMasterService'
+import SuperCoachLayout from '../../components/SuperCoachLayout'
+import { sessionMasterService } from '../../services/sessionMasterService'
 
 function SessionMasterModels() {
   const navigate = useNavigate()

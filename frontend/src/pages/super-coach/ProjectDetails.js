@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import SuperCoachLayout from '../components/SuperCoachLayout'
-import { projectService } from '../services/projectService'
+import SuperCoachLayout from '../../components/SuperCoachLayout'
+import { projectService } from '../../services/projectService'
 
 function ProjectDetails() {
   const { id } = useParams()

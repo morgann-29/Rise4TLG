@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import SuperCoachLayout from '../components/SuperCoachLayout'
-import { groupService } from '../services/groupService'
+import SuperCoachLayout from '../../components/SuperCoachLayout'
+import { groupService } from '../../services/groupService'
 
 function GroupDetails() {
   const { id } = useParams()

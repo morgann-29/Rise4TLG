@@ -1,24 +1,27 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
-import Dashboard from './pages/Dashboard'
+// Navigant pages
+import NavigantDashboard from './pages/navigant/NavigantDashboard'
 import ForgotPassword from './pages/ForgotPassword'
 import Login from './pages/Login'
 import ResetPassword from './pages/ResetPassword'
-import AdminDashboard from './pages/AdminDashboard'
-import Users from './pages/Users'
-import TypeSupports from './pages/TypeSupports'
-import TypeSeances from './pages/TypeSeances'
-import TypeWorkLeads from './pages/TypeWorkLeads'
-import SuperCoachDashboard from './pages/SuperCoachDashboard'
-import Projects from './pages/Projects'
-import ProjectDetails from './pages/ProjectDetails'
-import Groups from './pages/Groups'
-import GroupDetails from './pages/GroupDetails'
-import WorkLeadMasterModels from './pages/WorkLeadMasterModels'
-import WorkLeadMasterDetail from './pages/WorkLeadMasterDetail'
-import SessionMasterModels from './pages/SessionMasterModels'
-import SessionMasterDetail from './pages/SessionMasterDetail'
+// Admin pages
+import AdminDashboard from './pages/admin/AdminDashboard'
+import Users from './pages/admin/Users'
+import TypeSupports from './pages/admin/TypeSupports'
+import TypeSeances from './pages/admin/TypeSeances'
+import TypeWorkLeads from './pages/admin/TypeWorkLeads'
+// Super Coach pages
+import SuperCoachDashboard from './pages/super-coach/SuperCoachDashboard'
+import Projects from './pages/super-coach/Projects'
+import ProjectDetails from './pages/super-coach/ProjectDetails'
+import Groups from './pages/super-coach/Groups'
+import GroupDetails from './pages/super-coach/GroupDetails'
+import WorkLeadMasterModels from './pages/super-coach/WorkLeadMasterModels'
+import WorkLeadMasterModelDetail from './pages/super-coach/WorkLeadMasterModelDetail'
+import SessionMasterModels from './pages/super-coach/SessionMasterModels'
+import SessionMasterModelDetail from './pages/super-coach/SessionMasterModelDetail'
 // Coach pages
 import CoachDashboard from './pages/coach/CoachDashboard'
 import GroupProgrammation from './pages/coach/GroupProgrammation'
@@ -220,7 +223,7 @@ function App() {
             path="/super-coach/work-lead-models/:id"
             element={
               <SuperCoachRoute>
-                <WorkLeadMasterDetail />
+                <WorkLeadMasterModelDetail />
               </SuperCoachRoute>
             }
           />
@@ -238,7 +241,7 @@ function App() {
             path="/super-coach/session-models/:id"
             element={
               <SuperCoachRoute>
-                <SessionMasterDetail />
+                <SessionMasterModelDetail />
               </SuperCoachRoute>
             }
           />
@@ -312,7 +315,7 @@ function App() {
             path="/dashboard"
             element={
               <OperatorRoute>
-                <Dashboard />
+                <NavigantDashboard />
               </OperatorRoute>
             }
           />

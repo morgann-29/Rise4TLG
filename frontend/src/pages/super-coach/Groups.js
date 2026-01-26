@@ -1,33 +1,51 @@
 import { useState, useEffect } from 'react'
-import AdminLayout from '../components/AdminLayout'
-import { adminService } from '../services/adminService'
+import { useNavigate } from 'react-router-dom'
+import SuperCoachLayout from '../../components/SuperCoachLayout'
+import { groupService } from '../../services/groupService'
 
-function TypeSeances() {
+function Groups() {
+  const navigate = useNavigate()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
-  const [formData, setFormData] = useState({ name: '', is_sailing: true })
+  const [formData, setFormData] = useState({
+    name: '',
+    type_support_id: ''
+  })
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError] = useState(null)
   const [showDeleted, setShowDeleted] = useState(false)
 
+  // Listes pour les dropdowns
+  const [typeSupports, setTypeSupports] = useState([])
+
   useEffect(() => {
     loadItems()
+    loadDropdowns()
   }, [showDeleted])
 
   const loadItems = async () => {
     try {
       setLoading(true)
-      const data = await adminService.getTypeSeances(showDeleted)
+      const data = await groupService.getGroups(showDeleted)
       setItems(data || [])
       setError(null)
     } catch (err) {
-      setError('Erreur lors du chargement')
+      setError('Erreur lors du chargement des groupes')
       console.error(err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadDropdowns = async () => {
+    try {
+      const typeSupportsData = await groupService.getTypeSupports()
+      setTypeSupports(typeSupportsData || [])
+    } catch (err) {
+      console.error('Erreur chargement dropdowns:', err)
     }
   }
 
@@ -36,14 +54,19 @@ function TypeSeances() {
     setActionLoading(true)
     setActionError(null)
     try {
+      const submitData = {
+        name: formData.name,
+        type_support_id: formData.type_support_id ? parseInt(formData.type_support_id) : null
+      }
+
       if (editingItem) {
-        await adminService.updateTypeSeance(editingItem.id, formData)
+        await groupService.updateGroup(editingItem.id, submitData)
       } else {
-        await adminService.createTypeSeance(formData)
+        await groupService.createGroup(submitData)
       }
       setShowModal(false)
       setEditingItem(null)
-      setFormData({ name: '', is_sailing: true })
+      resetForm()
       await loadItems()
     } catch (err) {
       setActionError(err.response?.data?.detail || 'Erreur lors de l\'operation')
@@ -53,9 +76,9 @@ function TypeSeances() {
   }
 
   const handleDelete = async (item) => {
-    if (!window.confirm(`Supprimer "${item.name}" ?`)) return
+    if (!window.confirm(`Supprimer le groupe "${item.name}" ?`)) return
     try {
-      await adminService.deleteTypeSeance(item.id)
+      await groupService.deleteGroup(item.id)
       await loadItems()
     } catch (err) {
       alert(err.response?.data?.detail || 'Erreur lors de la suppression')
@@ -64,44 +87,60 @@ function TypeSeances() {
 
   const handleRestore = async (item) => {
     try {
-      await adminService.restoreTypeSeance(item.id)
+      await groupService.restoreGroup(item.id)
       await loadItems()
     } catch (err) {
       alert(err.response?.data?.detail || 'Erreur lors de la restauration')
     }
   }
 
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      type_support_id: ''
+    })
+  }
+
   const openCreateModal = () => {
     setEditingItem(null)
-    setFormData({ name: '', is_sailing: true })
+    resetForm()
     setActionError(null)
     setShowModal(true)
   }
 
   const openEditModal = (item) => {
     setEditingItem(item)
-    setFormData({ name: item.name, is_sailing: item.is_sailing })
+    setFormData({
+      name: item.name,
+      type_support_id: item.type_support_id ? item.type_support_id.toString() : ''
+    })
     setActionError(null)
     setShowModal(true)
   }
 
+  const handleRowClick = (item) => {
+    if (!item.is_deleted) {
+      navigate(`/super-coach/groups/${item.id}`)
+    }
+  }
+
   if (loading) {
     return (
-      <AdminLayout>
+      <SuperCoachLayout>
         <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
         </div>
-      </AdminLayout>
+      </SuperCoachLayout>
     )
   }
 
   return (
-    <AdminLayout>
+    <SuperCoachLayout>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Types de seance
+            Groupes
           </h1>
           <div className="flex items-center space-x-4">
             <label className="flex items-center text-sm text-gray-600 dark:text-gray-400">
@@ -115,12 +154,12 @@ function TypeSeances() {
             </label>
             <button
               onClick={openCreateModal}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center"
             >
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
-              Nouveau type
+              Nouveau groupe
             </button>
           </div>
         </div>
@@ -140,13 +179,16 @@ function TypeSeances() {
                   Nom
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Navigation
+                  Type de support
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Coachs
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Projets
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Statut
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Cree le
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Actions
@@ -155,19 +197,33 @@ function TypeSeances() {
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {items.map((item) => (
-                <tr key={item.id} className={item.is_deleted ? 'opacity-50' : ''}>
+                <tr
+                  key={item.id}
+                  className={`${item.is_deleted ? 'opacity-50' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                  onClick={() => handleRowClick(item)}
+                >
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900 dark:text-white">
                       {item.name}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      item.is_sailing
-                        ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
-                    }`}>
-                      {item.is_sailing ? 'Navigation' : 'A terre'}
+                    {item.type_support_name ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                        {item.type_support_name}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 dark:text-gray-500">-</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200">
+                      {item.coaches_count || 0}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200">
+                      {item.projects_count || 0}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -181,11 +237,8 @@ function TypeSeances() {
                       </span>
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    {new Date(item.created_at).toLocaleDateString('fr-FR')}
-                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex justify-end space-x-2">
+                    <div className="flex justify-end space-x-2" onClick={(e) => e.stopPropagation()}>
                       {item.is_deleted ? (
                         <button
                           onClick={() => handleRestore(item)}
@@ -224,8 +277,8 @@ function TypeSeances() {
               ))}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan="5" className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
-                    Aucun type de seance
+                  <td colSpan="6" className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                    Aucun groupe
                   </td>
                 </tr>
               )}
@@ -241,7 +294,7 @@ function TypeSeances() {
             <div className="fixed inset-0 bg-black opacity-50" onClick={() => setShowModal(false)}></div>
             <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                {editingItem ? 'Modifier le type' : 'Nouveau type de seance'}
+                {editingItem ? 'Modifier le groupe' : 'Nouveau groupe'}
               </h3>
               {actionError && (
                 <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg text-sm">
@@ -251,31 +304,36 @@ function TypeSeances() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Nom *
+                    Nom du groupe *
                   </label>
                   <input
                     type="text"
                     required
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
-                    placeholder="Ex: Entrainement, Regate, Convoyage..."
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500"
+                    placeholder="Nom du groupe"
                   />
                 </div>
+
                 <div>
-                  <label className="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300">
-                    <input
-                      type="checkbox"
-                      checked={formData.is_sailing}
-                      onChange={(e) => setFormData({ ...formData, is_sailing: e.target.checked })}
-                      className="mr-2 rounded border-gray-300 dark:border-gray-600"
-                    />
-                    Seance de navigation (sur l'eau)
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Type de support
                   </label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
-                    Decochez si la seance se deroule a terre (briefing, theorie, etc.)
-                  </p>
+                  <select
+                    value={formData.type_support_id}
+                    onChange={(e) => setFormData({ ...formData, type_support_id: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="">Aucun (tous types)</option>
+                    {typeSupports.map((ts) => (
+                      <option key={ts.id} value={ts.id}>
+                        {ts.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
+
                 <div className="flex justify-end space-x-3 pt-4">
                   <button
                     type="button"
@@ -287,7 +345,7 @@ function TypeSeances() {
                   <button
                     type="submit"
                     disabled={actionLoading}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
                   >
                     {actionLoading ? 'En cours...' : (editingItem ? 'Enregistrer' : 'Creer')}
                   </button>
@@ -297,8 +355,8 @@ function TypeSeances() {
           </div>
         </div>
       )}
-    </AdminLayout>
+    </SuperCoachLayout>
   )
 }
 
-export default TypeSeances
+export default Groups
