@@ -3,6 +3,11 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 // Navigant pages
 import NavigantDashboard from './pages/navigant/NavigantDashboard'
+import NavigantSessions from './pages/navigant/Sessions'
+import NavigantWorkLeads from './pages/navigant/WorkLeads'
+// Shared pages
+import SessionDetail from './pages/shared/SessionDetail'
+import WorkLeadDetail from './pages/shared/WorkLeadDetail'
 import ForgotPassword from './pages/ForgotPassword'
 import Login from './pages/Login'
 import ResetPassword from './pages/ResetPassword'
@@ -320,7 +325,42 @@ function App() {
             }
           />
 
-          {/* TODO: Ajouter vos routes metier ici */}
+          <Route
+            path="/navigant/project/sessions"
+            element={
+              <OperatorRoute>
+                <NavigantSessions />
+              </OperatorRoute>
+            }
+          />
+
+          <Route
+            path="/navigant/project/work-leads"
+            element={
+              <OperatorRoute>
+                <NavigantWorkLeads />
+              </OperatorRoute>
+            }
+          />
+
+          {/* Shared routes (accessible by multiple roles) */}
+          <Route
+            path="/shared/sessions/:sessionId"
+            element={
+              <OperatorRoute>
+                <SessionDetail />
+              </OperatorRoute>
+            }
+          />
+
+          <Route
+            path="/shared/work-leads/:workLeadId"
+            element={
+              <OperatorRoute>
+                <WorkLeadDetail />
+              </OperatorRoute>
+            }
+          />
 
           </Routes>
         </AuthProvider>

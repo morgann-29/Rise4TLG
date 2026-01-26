@@ -258,3 +258,45 @@ async def require_coach(user: CurrentUser = Depends(get_current_user)) -> Curren
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur verification Coach: {str(e)}"
         )
+
+
+async def require_navigant(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+    """
+    Verifie que l'utilisateur connecte est un Navigant (type_profile_id = 4).
+    Leve une erreur 403 si ce n'est pas le cas.
+    """
+    if not user.active_profile_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acces refuse: profil requis"
+        )
+
+    try:
+        profile_response = supabase_admin.table("profile")\
+            .select("type_profile_id")\
+            .eq("id", user.active_profile_id)\
+            .execute()
+
+        if not profile_response.data:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse: profil non trouve"
+            )
+
+        type_profile_id = profile_response.data[0].get("type_profile_id")
+
+        if type_profile_id != NAVIGANT_PROFILE_TYPE_ID:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse: droits Navigant requis"
+            )
+
+        return user
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur verification Navigant: {str(e)}"
+        )

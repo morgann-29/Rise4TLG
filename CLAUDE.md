@@ -14,7 +14,7 @@
 backend/
   app/
     main.py          # Point d'entree FastAPI
-    auth.py          # Helpers auth (get_current_user, require_admin, require_super_coach, require_coach)
+    auth.py          # Helpers auth (get_current_user, require_admin, require_super_coach, require_coach, require_navigant)
     config.py        # Settings (SUPABASE_URL, clés)
     models/          # Pydantic schemas
       file.py        # Files et références
@@ -35,12 +35,14 @@ backend/
       work_lead_master.py # CRUD modèles axes
       session_master.py # CRUD modèles séances
       coach.py       # API Coach (groupes, sessions, work leads)
+      navigant.py    # API Navigant (projet, sessions, work leads)
 frontend/
   src/
     components/
       AdminLayout.js      # Layout admin
       SuperCoachLayout.js # Layout super coach
       CoachLayout.js      # Layout coach (menus dynamiques par groupe)
+      NavigantLayout.js   # Layout navigant (menu projet avec sections)
       ContentEditor/      # Wrapper RichTextEditor avec edit/view mode + autosave
       FileManager/        # Gestion upload/liste fichiers
       RichTextEditor/     # Editeur TipTap avec médias
@@ -64,6 +66,9 @@ frontend/
         GroupProjects.js
       navigant/            # Pages Navigant
         NavigantDashboard.js
+        Sessions.js, WorkLeads.js
+      shared/              # Pages multi-rôles (layout-agnostic)
+        SessionDetail.js, WorkLeadDetail.js
     services/
       api.js              # Config Axios
       adminService.js     # API admin
@@ -73,6 +78,7 @@ frontend/
       workLeadMasterService.js # API modèles axes
       sessionMasterService.js # API modèles séances
       coachService.js    # API coach (groupes, sessions, work leads)
+      navigantService.js # API navigant (projet, sessions, work leads)
 database/
   schema.sql         # Schema PostgreSQL complet avec RLS
   migrations/        # Scripts de migration SQL
@@ -200,6 +206,17 @@ cd frontend && npm start
 - `GET /api/coach/work-lead-types` - Types d'axes pour dropdown
 - `GET /api/coach/work-lead-models` - Modèles d'axes disponibles pour import
 
+### Navigant (type_profile_id = 4)
+- `GET /api/navigant/project` - Mon projet
+- `GET/POST/PUT/DELETE /api/navigant/sessions` - Mes sessions
+- `GET /api/navigant/sessions/{id}` - Détail session
+- `GET/POST/PUT/DELETE /api/navigant/work-leads` - Mes axes de travail
+- `GET /api/navigant/work-leads/{id}` - Détail axe
+- `POST /api/navigant/work-leads/{id}/archive` - Archiver axe
+- `POST /api/navigant/work-leads/{id}/unarchive` - Désarchiver axe
+- `GET /api/navigant/type-seances` - Types de séances pour dropdown
+- `GET /api/navigant/work-lead-types` - Types d'axes pour dropdown
+
 ### Fichiers (tous rôles avec permissions)
 - `POST /api/files/upload` - Upload fichier (multipart)
 - `GET /api/files/{entity_type}/{entity_id}` - Liste fichiers d'une entité
@@ -254,6 +271,7 @@ cd frontend && npm start
 - `AdminLayout` - Navigation admin (Users, Types référentiels)
 - `SuperCoachLayout` - Navigation super coach (Dashboard, Projects, Groups, Models)
 - `CoachLayout` - Navigation coach avec menus dynamiques par groupe assigné
+- `NavigantLayout` - Navigation navigant (Dashboard, Mon Projet avec sous-menus Séances/Axes)
 
 ## Routes Frontend
 
@@ -279,6 +297,11 @@ cd frontend && npm start
 /coach/groups/:groupId/work-leads
 /coach/groups/:groupId/work-leads/:workLeadId
 /coach/groups/:groupId/projects
+/navigant
+/navigant/project/sessions
+/navigant/project/work-leads
+/shared/sessions/:sessionId
+/shared/work-leads/:workLeadId
 ```
 
 ## Notes techniques

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth, admin, profile, type_profile, type_support, type_seance, work_lead_type, project, group, file, work_lead_master, session_master, coach
+from app.routers import auth, admin, profile, type_profile, type_support, type_seance, work_lead_type, project, group, file, work_lead_master, session_master, coach, navigant
 
 app = FastAPI(
     title="Starter API",
@@ -46,6 +46,7 @@ app.include_router(group.router)
 app.include_router(work_lead_master.router)
 app.include_router(session_master.router)
 app.include_router(coach.router)
+app.include_router(navigant.router)
 
 # Routers - Fichiers
 app.include_router(file.router)
