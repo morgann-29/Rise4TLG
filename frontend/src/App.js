@@ -346,10 +346,28 @@ function App() {
           />
 
           <Route
+            path="/coach/groups/:groupId/projects/:projectId/sessions/:sessionId"
+            element={
+              <CoachRoute>
+                <SessionDetail />
+              </CoachRoute>
+            }
+          />
+
+          <Route
             path="/coach/groups/:groupId/projects/:projectId/work-leads"
             element={
               <CoachRoute>
                 <ProjectWorkLeads />
+              </CoachRoute>
+            }
+          />
+
+          <Route
+            path="/coach/groups/:groupId/projects/:projectId/work-leads/:workLeadId"
+            element={
+              <CoachRoute>
+                <WorkLeadDetail />
               </CoachRoute>
             }
           />

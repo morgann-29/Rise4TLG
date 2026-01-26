@@ -1245,6 +1245,44 @@ async def unarchive_group_work_lead(
         )
 
 
+@router.post("/groups/{group_id}/work-leads/{work_lead_id}/restore", status_code=status.HTTP_204_NO_CONTENT)
+async def restore_group_work_lead(
+    group_id: str,
+    work_lead_id: str,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Restaurer un axe de travail supprime du groupe"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        response = supabase_admin.table("work_lead_master")\
+            .update({"is_deleted": False})\
+            .eq("id", work_lead_id)\
+            .eq("group_id", group_id)\
+            .eq("is_deleted", True)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Axe de travail non trouve ou non supprime"
+            )
+
+        return None
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
 # ============================================
 # PROJECTS (projets du groupe - lecture seule)
 # ============================================
@@ -1342,6 +1380,59 @@ class ProjectWorkLead(BaseModel):
     updated_at: datetime
 
 
+# --- Session Detail models (for project sessions) ---
+
+class CoachSessionMasterInfo(BaseModel):
+    """Info de la session_master liee"""
+    id: str
+    name: str
+    coach_id: Optional[str] = None
+    coach_name: Optional[str] = None
+    content: Optional[str] = None
+
+
+class CoachCrewMember(BaseModel):
+    """Membre de l'equipage"""
+    profile_id: str
+    name: Optional[str] = None
+    email: Optional[str] = None
+
+
+class CoachSessionWorkLeadItem(BaseModel):
+    """Work lead associe a une session avec status"""
+    id: str
+    work_lead_id: str
+    work_lead_name: str
+    work_lead_type_id: Optional[str] = None
+    work_lead_type_name: Optional[str] = None
+    work_lead_master_id: Optional[str] = None
+    status: str
+    override_master: Optional[bool] = None
+
+
+class ProjectSessionDetail(BaseModel):
+    """Session avec toutes les infos pour la page de detail"""
+    id: str
+    name: str
+    type_seance_id: int
+    type_seance_name: Optional[str] = None
+    type_seance_is_sailing: Optional[bool] = None
+    date_start: Optional[datetime] = None
+    date_end: Optional[datetime] = None
+    location: Optional[dict] = None
+    content: Optional[str] = None
+    is_deleted: bool = False
+    created_at: datetime
+    updated_at: datetime
+    # Infos supplementaires
+    project_id: str
+    project_name: str
+    session_master_id: Optional[str] = None
+    session_master: Optional[CoachSessionMasterInfo] = None
+    crew: List[CoachCrewMember] = []
+    work_leads: List[CoachSessionWorkLeadItem] = []
+
+
 async def _verify_project_in_group(project_id: str, group_id: str) -> bool:
     """Verifie que le projet appartient au groupe"""
     response = supabase_admin.table("group_project")\
@@ -1371,6 +1462,85 @@ def _get_current_status_for_work_lead(work_lead_id: str) -> str:
         return "NEW"
     except:
         return "NEW"
+
+
+def _get_session_crew(session_id: str) -> List[CoachCrewMember]:
+    """Recupere l'equipage d'une session"""
+    try:
+        response = supabase_admin.table("session_profile")\
+            .select("profile_id, profile(name, email)")\
+            .eq("session_id", session_id)\
+            .execute()
+
+        crew = []
+        for sp in response.data:
+            profile = sp.get("profile", {})
+            crew.append(CoachCrewMember(
+                profile_id=sp["profile_id"],
+                name=profile.get("name") if profile else None,
+                email=profile.get("email") if profile else None
+            ))
+        return crew
+    except:
+        return []
+
+
+def _get_session_work_leads_for_project(session_id: str) -> List[CoachSessionWorkLeadItem]:
+    """Recupere les work_leads associes a une session avec leur status"""
+    try:
+        response = supabase_admin.table("session_work_lead")\
+            .select("*, work_lead(id, name, work_lead_type_id, work_lead_master_id, work_lead_type(name))")\
+            .eq("session_id", session_id)\
+            .execute()
+
+        items = []
+        for swl in response.data:
+            wl = swl.get("work_lead", {})
+            wlt = wl.get("work_lead_type", {}) if wl else {}
+            # session_work_lead n'a pas d'id propre, on utilise une cle composite
+            composite_id = f"{swl['session_id']}_{swl['work_lead_id']}"
+            items.append(CoachSessionWorkLeadItem(
+                id=composite_id,
+                work_lead_id=swl["work_lead_id"],
+                work_lead_name=wl.get("name", "") if wl else "",
+                work_lead_type_id=wl.get("work_lead_type_id") if wl else None,
+                work_lead_type_name=wlt.get("name") if wlt else None,
+                work_lead_master_id=wl.get("work_lead_master_id") if wl else None,
+                status=swl["status"],
+                override_master=swl.get("override_master")
+            ))
+        return items
+    except Exception as e:
+        print(f"Error getting session work leads: {e}")
+        return []
+
+
+def _get_session_master_info_for_project(session_master_id: str) -> Optional[CoachSessionMasterInfo]:
+    """Recupere les infos de la session_master"""
+    try:
+        response = supabase_admin.table("session_master")\
+            .select("id, name, coach_id, content")\
+            .eq("id", session_master_id)\
+            .limit(1)\
+            .execute()
+
+        if not response.data:
+            return None
+
+        sm = response.data[0]
+        coach_name = None
+        if sm.get("coach_id"):
+            coach_name = _get_coach_name(sm["coach_id"])
+
+        return CoachSessionMasterInfo(
+            id=sm["id"],
+            name=sm["name"],
+            coach_id=sm.get("coach_id"),
+            coach_name=coach_name,
+            content=sm.get("content")
+        )
+    except:
+        return None
 
 
 @router.get("/groups/{group_id}/projects/{project_id}", response_model=ProjectDetail)
@@ -1507,6 +1677,93 @@ async def list_project_sessions(
             ))
 
         return sessions
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.get("/groups/{group_id}/projects/{project_id}/sessions/{session_id}/detail", response_model=ProjectSessionDetail)
+async def get_project_session_detail(
+    group_id: str,
+    project_id: str,
+    session_id: str,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Recupere une session avec toutes les infos pour la page de detail"""
+    try:
+        # Verifier acces au groupe
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Verifier que le projet appartient au groupe
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        # Recuperer la session
+        response = supabase_admin.table("session")\
+            .select("*, type_seance(name, is_sailing)")\
+            .eq("id", session_id)\
+            .eq("project_id", project_id)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Session non trouvee"
+            )
+
+        s = response.data[0]
+        type_seance = s.get("type_seance")
+
+        # Recuperer le nom du projet
+        project_response = supabase_admin.table("project")\
+            .select("name")\
+            .eq("id", project_id)\
+            .execute()
+        project_name = project_response.data[0]["name"] if project_response.data else ""
+
+        # Recuperer session_master si liee
+        session_master = None
+        if s.get("session_master_id"):
+            session_master = _get_session_master_info_for_project(s["session_master_id"])
+
+        # Recuperer equipage
+        crew = _get_session_crew(session_id)
+
+        # Recuperer work_leads
+        work_leads = _get_session_work_leads_for_project(session_id)
+
+        return ProjectSessionDetail(
+            id=s["id"],
+            name=s["name"],
+            type_seance_id=s["type_seance_id"],
+            type_seance_name=type_seance.get("name") if type_seance else None,
+            type_seance_is_sailing=type_seance.get("is_sailing") if type_seance else None,
+            date_start=s.get("date_start"),
+            date_end=s.get("date_end"),
+            location=s.get("location"),
+            content=s.get("content"),
+            is_deleted=s.get("is_deleted", False),
+            created_at=s["created_at"],
+            updated_at=s["updated_at"],
+            project_id=project_id,
+            project_name=project_name,
+            session_master_id=s.get("session_master_id"),
+            session_master=session_master,
+            crew=crew,
+            work_leads=work_leads
+        )
 
     except HTTPException:
         raise
@@ -1727,6 +1984,193 @@ async def delete_project_session(
             )
 
         return None
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+# ============================================
+# PROJECT SESSION WORK LEADS
+# ============================================
+
+@router.get("/groups/{group_id}/projects/{project_id}/sessions/{session_id}/work-leads", response_model=List[CoachSessionWorkLeadItem])
+async def get_project_session_work_leads(
+    group_id: str,
+    project_id: str,
+    session_id: str,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Recupere les work leads associes a une session de projet"""
+    try:
+        # Verifier acces au groupe
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Verifier que le projet appartient au groupe
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        # Verifier que la session appartient au projet
+        session_check = supabase_admin.table("session")\
+            .select("id")\
+            .eq("id", session_id)\
+            .eq("project_id", project_id)\
+            .execute()
+
+        if not session_check.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Session non trouvee"
+            )
+
+        return _get_session_work_leads_for_project(session_id)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+class ProjectSessionWorkLeadUpdate(BaseModel):
+    status: str  # TODO, WORKING, DANGER, OK
+
+
+@router.put("/groups/{group_id}/projects/{project_id}/sessions/{session_id}/work-leads/{work_lead_id}", response_model=CoachSessionWorkLeadItem)
+async def update_project_session_work_lead(
+    group_id: str,
+    project_id: str,
+    session_id: str,
+    work_lead_id: str,
+    data: ProjectSessionWorkLeadUpdate,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Met a jour le status d'un work lead pour une session.
+    Si le work_lead est lie a un master (override_master=FALSE), passe override_master a TRUE.
+    """
+    try:
+        # Verifier acces au groupe
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Verifier que le projet appartient au groupe
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        # Verifier que la session appartient au projet
+        session_check = supabase_admin.table("session")\
+            .select("id")\
+            .eq("id", session_id)\
+            .eq("project_id", project_id)\
+            .execute()
+
+        if not session_check.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Session non trouvee"
+            )
+
+        # Verifier que le work_lead appartient au projet
+        wl_check = supabase_admin.table("work_lead")\
+            .select("id")\
+            .eq("id", work_lead_id)\
+            .eq("project_id", project_id)\
+            .execute()
+
+        if not wl_check.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Axe de travail non trouve"
+            )
+
+        # Valider le status
+        valid_statuses = ["TODO", "WORKING", "DANGER", "OK"]
+        if data.status not in valid_statuses:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Status invalide. Valeurs acceptees: {', '.join(valid_statuses)}"
+            )
+
+        # Verifier si l'entree existe deja (table pivot avec cle composite session_id + work_lead_id)
+        existing = supabase_admin.table("session_work_lead")\
+            .select("session_id, work_lead_id, override_master")\
+            .eq("session_id", session_id)\
+            .eq("work_lead_id", work_lead_id)\
+            .execute()
+
+        if existing.data:
+            # Mise a jour - si override_master est FALSE, le passer a TRUE
+            update_data = {
+                "status": data.status,
+                "profile_id": user.active_profile_id
+            }
+            if existing.data[0].get("override_master") is False:
+                update_data["override_master"] = True
+
+            supabase_admin.table("session_work_lead")\
+                .update(update_data)\
+                .eq("session_id", session_id)\
+                .eq("work_lead_id", work_lead_id)\
+                .execute()
+        else:
+            # Creation - override_master = NULL (work lead cree directement, pas de master)
+            supabase_admin.table("session_work_lead")\
+                .insert({
+                    "session_id": session_id,
+                    "work_lead_id": work_lead_id,
+                    "status": data.status,
+                    "override_master": None,
+                    "profile_id": user.active_profile_id
+                })\
+                .execute()
+
+        # Recuperer et retourner l'item mis a jour
+        result = supabase_admin.table("session_work_lead")\
+            .select("*, work_lead(id, name, work_lead_type_id, work_lead_master_id, work_lead_type(name))")\
+            .eq("session_id", session_id)\
+            .eq("work_lead_id", work_lead_id)\
+            .execute()
+
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erreur lors de la mise a jour"
+            )
+
+        swl = result.data[0]
+        wl = swl.get("work_lead", {})
+        wlt = wl.get("work_lead_type", {}) if wl else {}
+        composite_id = f"{swl['session_id']}_{swl['work_lead_id']}"
+
+        return CoachSessionWorkLeadItem(
+            id=composite_id,
+            work_lead_id=swl["work_lead_id"],
+            work_lead_name=wl.get("name", "") if wl else "",
+            work_lead_type_id=wl.get("work_lead_type_id") if wl else None,
+            work_lead_type_name=wlt.get("name") if wlt else None,
+            work_lead_master_id=wl.get("work_lead_master_id") if wl else None,
+            status=swl["status"],
+            override_master=swl.get("override_master")
+        )
 
     except HTTPException:
         raise
@@ -2090,6 +2534,53 @@ async def unarchive_project_work_lead(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Axe de travail non trouve ou non archive"
+            )
+
+        return None
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.post("/groups/{group_id}/projects/{project_id}/work-leads/{work_lead_id}/restore", status_code=status.HTTP_204_NO_CONTENT)
+async def restore_project_work_lead(
+    group_id: str,
+    project_id: str,
+    work_lead_id: str,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Restaurer un axe de travail supprime d'un projet"""
+    try:
+        # Verifier acces au groupe
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Verifier que le projet appartient au groupe
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        response = supabase_admin.table("work_lead")\
+            .update({"is_deleted": False})\
+            .eq("id", work_lead_id)\
+            .eq("project_id", project_id)\
+            .eq("is_deleted", True)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Axe de travail non trouve ou non supprime"
             )
 
         return None

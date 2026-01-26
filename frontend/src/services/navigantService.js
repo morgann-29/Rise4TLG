@@ -40,6 +40,23 @@ export const navigantService = {
     await api.delete(`/api/navigant/sessions/${sessionId}`)
   },
 
+  // Session detail (avec session_master, crew, work_leads)
+  async getSessionDetail(sessionId) {
+    const response = await api.get(`/api/navigant/sessions/${sessionId}/detail`)
+    return response.data
+  },
+
+  // Session work leads
+  async getSessionWorkLeads(sessionId) {
+    const response = await api.get(`/api/navigant/sessions/${sessionId}/work-leads`)
+    return response.data
+  },
+
+  async updateSessionWorkLead(sessionId, workLeadId, status) {
+    const response = await api.put(`/api/navigant/sessions/${sessionId}/work-leads/${workLeadId}`, { status })
+    return response.data
+  },
+
   // ============================================
   // WORK LEADS (work_lead du projet, sans work_lead_master)
   // ============================================
@@ -79,6 +96,10 @@ export const navigantService = {
 
   async unarchiveWorkLead(workLeadId) {
     await api.post(`/api/navigant/work-leads/${workLeadId}/unarchive`)
+  },
+
+  async restoreWorkLead(workLeadId) {
+    await api.post(`/api/navigant/work-leads/${workLeadId}/restore`)
   },
 
   // ============================================

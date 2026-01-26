@@ -91,6 +91,10 @@ export const coachService = {
     await api.post(`/api/coach/groups/${groupId}/work-leads/${workLeadId}/unarchive`)
   },
 
+  async restoreGroupWorkLead(groupId, workLeadId) {
+    await api.post(`/api/coach/groups/${groupId}/work-leads/${workLeadId}/restore`)
+  },
+
   // ============================================
   // PROJECTS
   // ============================================
@@ -130,6 +134,23 @@ export const coachService = {
     await api.delete(`/api/coach/groups/${groupId}/projects/${projectId}/sessions/${sessionId}`)
   },
 
+  // Session detail (avec session_master, crew, work_leads)
+  async getProjectSessionDetail(groupId, projectId, sessionId) {
+    const response = await api.get(`/api/coach/groups/${groupId}/projects/${projectId}/sessions/${sessionId}/detail`)
+    return response.data
+  },
+
+  // Session work leads
+  async getProjectSessionWorkLeads(groupId, projectId, sessionId) {
+    const response = await api.get(`/api/coach/groups/${groupId}/projects/${projectId}/sessions/${sessionId}/work-leads`)
+    return response.data
+  },
+
+  async updateProjectSessionWorkLead(groupId, projectId, sessionId, workLeadId, status) {
+    const response = await api.put(`/api/coach/groups/${groupId}/projects/${projectId}/sessions/${sessionId}/work-leads/${workLeadId}`, { status })
+    return response.data
+  },
+
   // ============================================
   // PROJECT WORK LEADS (axes de travail du projet)
   // ============================================
@@ -164,6 +185,10 @@ export const coachService = {
 
   async unarchiveProjectWorkLead(groupId, projectId, workLeadId) {
     await api.post(`/api/coach/groups/${groupId}/projects/${projectId}/work-leads/${workLeadId}/unarchive`)
+  },
+
+  async restoreProjectWorkLead(groupId, projectId, workLeadId) {
+    await api.post(`/api/coach/groups/${groupId}/projects/${projectId}/work-leads/${workLeadId}/restore`)
   },
 
   // ============================================

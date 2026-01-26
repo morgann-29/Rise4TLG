@@ -200,12 +200,17 @@ cd frontend && npm start
 - `GET /api/coach/groups/{id}/work-leads/{work_lead_id}` - Détail axe
 - `POST /api/coach/groups/{id}/work-leads/{work_lead_id}/archive` - Archiver axe
 - `POST /api/coach/groups/{id}/work-leads/{work_lead_id}/unarchive` - Désarchiver axe
+- `POST /api/coach/groups/{id}/work-leads/{work_lead_id}/restore` - Restaurer axe supprimé
 - `GET /api/coach/groups/{id}/projects` - Projets du groupe
 - `GET /api/coach/groups/{id}/projects/{project_id}` - Détail projet avec compteurs sessions/axes
 - `GET/POST/PUT/DELETE /api/coach/groups/{id}/projects/{project_id}/sessions` - Sessions du projet
+- `GET /api/coach/groups/{id}/projects/{project_id}/sessions/{session_id}/detail` - Session complète (session_master, équipage, work_leads)
+- `GET /api/coach/groups/{id}/projects/{project_id}/sessions/{session_id}/work-leads` - Work leads de la session
+- `PUT /api/coach/groups/{id}/projects/{project_id}/sessions/{session_id}/work-leads/{work_lead_id}` - Modifier status work lead
 - `GET/POST/PUT/DELETE /api/coach/groups/{id}/projects/{project_id}/work-leads` - Axes de travail du projet
 - `POST /api/coach/groups/{id}/projects/{project_id}/work-leads/{work_lead_id}/archive` - Archiver axe projet
 - `POST /api/coach/groups/{id}/projects/{project_id}/work-leads/{work_lead_id}/unarchive` - Désarchiver axe projet
+- `POST /api/coach/groups/{id}/projects/{project_id}/work-leads/{work_lead_id}/restore` - Restaurer axe projet supprimé
 - `POST /api/coach/groups/{id}/work-leads/import` - Importer un modèle d'axe dans le groupe
 - `GET /api/coach/type-seances` - Types de séances pour dropdown
 - `GET /api/coach/work-lead-types` - Types d'axes pour dropdown
@@ -214,11 +219,15 @@ cd frontend && npm start
 ### Navigant (type_profile_id = 4)
 - `GET /api/navigant/project` - Mon projet
 - `GET/POST/PUT/DELETE /api/navigant/sessions` - Mes sessions
-- `GET /api/navigant/sessions/{id}` - Détail session
+- `GET /api/navigant/sessions/{id}` - Détail session basique
+- `GET /api/navigant/sessions/{id}/detail` - Session complète (session_master, équipage, work_leads)
+- `GET /api/navigant/sessions/{id}/work-leads` - Work leads associés à la session
+- `PUT /api/navigant/sessions/{id}/work-leads/{work_lead_id}` - Modifier status work lead session
 - `GET/POST/PUT/DELETE /api/navigant/work-leads` - Mes axes de travail
 - `GET /api/navigant/work-leads/{id}` - Détail axe
 - `POST /api/navigant/work-leads/{id}/archive` - Archiver axe
 - `POST /api/navigant/work-leads/{id}/unarchive` - Désarchiver axe
+- `POST /api/navigant/work-leads/{id}/restore` - Restaurer axe supprimé
 - `GET /api/navigant/type-seances` - Types de séances pour dropdown
 - `GET /api/navigant/work-lead-types` - Types d'axes pour dropdown
 
@@ -304,7 +313,9 @@ cd frontend && npm start
 /coach/groups/:groupId/projects
 /coach/groups/:groupId/projects/:projectId
 /coach/groups/:groupId/projects/:projectId/sessions
+/coach/groups/:groupId/projects/:projectId/sessions/:sessionId
 /coach/groups/:groupId/projects/:projectId/work-leads
+/coach/groups/:groupId/projects/:projectId/work-leads/:workLeadId
 /navigant
 /navigant/project/sessions
 /navigant/project/work-leads

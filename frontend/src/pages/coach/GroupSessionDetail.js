@@ -458,7 +458,7 @@ function GroupSessionDetail() {
                   {session.projects.map((project) => (
                     <button
                       key={project.id}
-                      onClick={() => project.session_id && navigate(`/shared/sessions/${project.session_id}`)}
+                      onClick={() => project.session_id && navigate(`/coach/groups/${groupId}/projects/${project.id}/sessions/${project.session_id}`)}
                       disabled={!project.session_id}
                       className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 ${project.session_id ? 'hover:bg-indigo-100 dark:hover:bg-indigo-900 hover:text-indigo-800 dark:hover:text-indigo-200 cursor-pointer' : 'opacity-60 cursor-default'} transition-colors`}
                     >
@@ -573,9 +573,6 @@ function GroupSessionDetail() {
                         className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium border ${getStatusColor(wlm.status)} hover:opacity-80 transition-opacity cursor-pointer`}
                       >
                         {wlm.work_lead_master_name}
-                        <svg className="w-3.5 h-3.5 ml-1.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
                       </button>
                     ))}
                   </div>

@@ -158,6 +158,34 @@ function ProjectWorkLeads() {
     }
   }
 
+  const handleUnarchive = async (item) => {
+    if (!window.confirm(`Désarchiver l'axe de travail "${item.name}" ?`)) return
+    try {
+      if (isCoachContext) {
+        await coachService.unarchiveProjectWorkLead(groupId, projectId, item.id)
+      } else {
+        await navigantService.unarchiveWorkLead(item.id)
+      }
+      await loadData()
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Erreur lors du désarchivage')
+    }
+  }
+
+  const handleRestore = async (item) => {
+    if (!window.confirm(`Restaurer l'axe de travail "${item.name}" ?`)) return
+    try {
+      if (isCoachContext) {
+        await coachService.restoreProjectWorkLead(groupId, projectId, item.id)
+      } else {
+        await navigantService.restoreWorkLead(item.id)
+      }
+      await loadData()
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Erreur lors de la restauration')
+    }
+  }
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -185,7 +213,11 @@ function ProjectWorkLeads() {
 
   const handleRowClick = (item) => {
     if (!item.is_deleted) {
-      navigate(`/shared/work-leads/${item.id}`)
+      if (isCoachContext) {
+        navigate(`/coach/groups/${groupId}/projects/${projectId}/work-leads/${item.id}`)
+      } else {
+        navigate(`/shared/work-leads/${item.id}`)
+      }
     }
   }
 
@@ -339,7 +371,12 @@ function ProjectWorkLeads() {
                                 </svg>
                               </div>
                               <div className="ml-4">
-                                <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                <div className="text-sm font-medium text-gray-900 dark:text-white flex items-center">
+                                  {item.work_lead_master_id && (
+                                    <svg className="w-4 h-4 mr-1.5 text-blue-500 dark:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" title="Lié à un modèle">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                    </svg>
+                                  )}
                                   {item.name}
                                 </div>
                               </div>
@@ -376,7 +413,17 @@ function ProjectWorkLeads() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div className="flex justify-end space-x-2" onClick={(e) => e.stopPropagation()}>
-                              {!item.is_deleted && (
+                              {item.is_deleted ? (
+                                <button
+                                  onClick={() => handleRestore(item)}
+                                  className="text-green-600 dark:text-green-400 hover:text-green-900 dark:hover:text-green-300"
+                                  title="Restaurer"
+                                >
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                  </svg>
+                                </button>
+                              ) : (
                                 <>
                                   <button
                                     onClick={(e) => openEditModal(item, e)}
@@ -387,7 +434,17 @@ function ProjectWorkLeads() {
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
                                   </button>
-                                  {!item.is_archived && (
+                                  {item.is_archived ? (
+                                    <button
+                                      onClick={() => handleUnarchive(item)}
+                                      className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-300"
+                                      title="Désarchiver"
+                                    >
+                                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4l3-3m0 0l3 3m-3-3v6" />
+                                      </svg>
+                                    </button>
+                                  ) : (
                                     <button
                                       onClick={() => handleArchive(item)}
                                       className="text-amber-600 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300"

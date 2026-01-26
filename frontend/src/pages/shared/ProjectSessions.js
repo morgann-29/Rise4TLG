@@ -161,7 +161,11 @@ function ProjectSessions() {
 
   const handleRowClick = (item) => {
     if (!item.is_deleted) {
-      navigate(`/shared/sessions/${item.id}`)
+      if (isCoachContext) {
+        navigate(`/coach/groups/${groupId}/projects/${projectId}/sessions/${item.id}`)
+      } else {
+        navigate(`/shared/sessions/${item.id}`)
+      }
     }
   }
 
