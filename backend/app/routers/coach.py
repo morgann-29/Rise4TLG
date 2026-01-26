@@ -192,6 +192,193 @@ def _get_current_status_for_work_lead_master(work_lead_master_id: str) -> str:
         return "NEW"
 
 
+def _propagate_work_lead_master_to_projects(
+    session_master_id: str,
+    work_lead_master_id: str,
+    new_status: str,
+    profile_id: str
+):
+    """
+    Propage un work_lead_master vers les work_leads des projets lies a la session_master.
+
+    Pour chaque projet lie a la session_master:
+    1. Cherche un work_lead existant (inclut archives) lie au work_lead_master
+    2. Si non trouve, cree le work_lead en copiant name, content, work_lead_type_id
+       et partage les fichiers via files_reference
+    3. Met a jour session_work_lead si override_master = FALSE ou nouvelle entree
+    """
+    try:
+        # Recuperer les infos du work_lead_master
+        wlm_response = supabase_admin.table("work_lead_master")\
+            .select("id, name, content, work_lead_type_id")\
+            .eq("id", work_lead_master_id)\
+            .execute()
+
+        if not wlm_response.data:
+            return
+
+        work_lead_master = wlm_response.data[0]
+
+        # Recuperer les sessions individuelles liees a cette session_master
+        # (et donc les projets)
+        sessions_response = supabase_admin.table("session")\
+            .select("id, project_id")\
+            .eq("session_master_id", session_master_id)\
+            .eq("is_deleted", False)\
+            .execute()
+
+        if not sessions_response.data:
+            return
+
+        for session_data in sessions_response.data:
+            session_id = session_data["id"]
+            project_id = session_data["project_id"]
+
+            # Chercher un work_lead existant pour ce projet et ce work_lead_master
+            # (inclure les archives)
+            existing_wl = supabase_admin.table("work_lead")\
+                .select("id")\
+                .eq("project_id", project_id)\
+                .eq("work_lead_master_id", work_lead_master_id)\
+                .eq("is_deleted", False)\
+                .execute()
+
+            work_lead_id = None
+
+            if existing_wl.data:
+                # Work lead existe deja
+                work_lead_id = existing_wl.data[0]["id"]
+            else:
+                # Creer le work_lead
+                new_wl = supabase_admin.table("work_lead")\
+                    .insert({
+                        "project_id": project_id,
+                        "work_lead_master_id": work_lead_master_id,
+                        "work_lead_type_id": work_lead_master["work_lead_type_id"],
+                        "name": work_lead_master["name"],
+                        "content": work_lead_master.get("content")
+                    })\
+                    .execute()
+
+                if new_wl.data:
+                    work_lead_id = new_wl.data[0]["id"]
+
+                    # Copier les fichiers via files_reference
+                    # 1. Fichiers sources du work_lead_master
+                    source_files = supabase_admin.table("files")\
+                        .select("id")\
+                        .eq("origin_entity_type", "work_lead_master")\
+                        .eq("origin_entity_id", work_lead_master_id)\
+                        .execute()
+
+                    for file_record in source_files.data:
+                        supabase_admin.table("files_reference")\
+                            .insert({
+                                "files_id": file_record["id"],
+                                "entity_type": "work_lead",
+                                "entity_id": work_lead_id
+                            })\
+                            .execute()
+
+                    # 2. Fichiers partages avec le work_lead_master
+                    shared_files = supabase_admin.table("files_reference")\
+                        .select("files_id")\
+                        .eq("entity_type", "work_lead_master")\
+                        .eq("entity_id", work_lead_master_id)\
+                        .execute()
+
+                    for ref_record in shared_files.data:
+                        supabase_admin.table("files_reference")\
+                            .insert({
+                                "files_id": ref_record["files_id"],
+                                "entity_type": "work_lead",
+                                "entity_id": work_lead_id
+                            })\
+                            .execute()
+
+            if work_lead_id:
+                # Verifier si une entree session_work_lead existe deja
+                existing_swl = supabase_admin.table("session_work_lead")\
+                    .select("session_id, override_master")\
+                    .eq("session_id", session_id)\
+                    .eq("work_lead_id", work_lead_id)\
+                    .execute()
+
+                if existing_swl.data:
+                    # Entree existe - ne synchroniser que si override_master = FALSE
+                    if existing_swl.data[0].get("override_master") == False:
+                        supabase_admin.table("session_work_lead")\
+                            .update({
+                                "status": new_status,
+                                "profile_id": profile_id
+                            })\
+                            .eq("session_id", session_id)\
+                            .eq("work_lead_id", work_lead_id)\
+                            .execute()
+                else:
+                    # Nouvelle entree - creer avec override_master = FALSE
+                    supabase_admin.table("session_work_lead")\
+                        .insert({
+                            "session_id": session_id,
+                            "work_lead_id": work_lead_id,
+                            "status": new_status,
+                            "override_master": False,
+                            "profile_id": profile_id
+                        })\
+                        .execute()
+
+    except Exception as e:
+        # Log l'erreur mais ne pas faire echouer l'operation principale
+        print(f"Erreur propagation work_lead_master: {str(e)}")
+
+
+def _remove_work_lead_master_from_projects(
+    session_master_id: str,
+    work_lead_master_id: str
+):
+    """
+    Supprime les session_work_lead lies a un work_lead_master pour une session_master.
+    Ne supprime que les entrees avec override_master = FALSE.
+    """
+    try:
+        # Recuperer les sessions individuelles liees a cette session_master
+        sessions_response = supabase_admin.table("session")\
+            .select("id, project_id")\
+            .eq("session_master_id", session_master_id)\
+            .eq("is_deleted", False)\
+            .execute()
+
+        if not sessions_response.data:
+            return
+
+        for session_data in sessions_response.data:
+            session_id = session_data["id"]
+            project_id = session_data["project_id"]
+
+            # Trouver le work_lead lie au work_lead_master pour ce projet
+            existing_wl = supabase_admin.table("work_lead")\
+                .select("id")\
+                .eq("project_id", project_id)\
+                .eq("work_lead_master_id", work_lead_master_id)\
+                .eq("is_deleted", False)\
+                .execute()
+
+            if existing_wl.data:
+                work_lead_id = existing_wl.data[0]["id"]
+
+                # Supprimer session_work_lead seulement si override_master = FALSE
+                supabase_admin.table("session_work_lead")\
+                    .delete()\
+                    .eq("session_id", session_id)\
+                    .eq("work_lead_id", work_lead_id)\
+                    .eq("override_master", False)\
+                    .execute()
+
+    except Exception as e:
+        # Log l'erreur mais ne pas faire echouer l'operation principale
+        print(f"Erreur suppression session_work_lead: {str(e)}")
+
+
 # ============================================
 # GROUPS
 # ============================================
@@ -1656,6 +1843,12 @@ async def update_session_work_lead_master(
             )
 
         if data.status is None:
+            # Supprimer les session_work_lead lies (seulement si override_master = FALSE)
+            _remove_work_lead_master_from_projects(
+                session_master_id=session_id,
+                work_lead_master_id=data.work_lead_master_id
+            )
+
             # Supprimer l'association
             supabase_admin.table("session_master_work_lead_master")\
                 .delete()\
@@ -1698,6 +1891,14 @@ async def update_session_work_lead_master(
                         "profile_id": user.active_profile_id
                     })\
                     .execute()
+
+            # Propager vers les work_leads des projets lies
+            _propagate_work_lead_master_to_projects(
+                session_master_id=session_id,
+                work_lead_master_id=data.work_lead_master_id,
+                new_status=data.status,
+                profile_id=user.active_profile_id
+            )
 
             return {"message": "Association mise a jour", "status": data.status}
 

@@ -132,6 +132,10 @@ files_reference (partage de fichiers entre entités)
 - **Soft delete**: champ `is_deleted` (boolean, default false)
 - **Archivage**: champ `is_archived` (boolean) pour work_lead_master et work_lead
 - **Status work_lead**: le statut est stocké dans les tables pivots (`session_master_work_lead_master`, `session_work_lead`) avec enum (TODO, WORKING, DANGER, OK). Le `current_status` est calculé : pas d'entrée pivot = NEW, sinon = statut de l'entrée la plus récente
+- **Override master**: `session_work_lead.override_master` (BOOLEAN nullable) contrôle la synchronisation:
+  - `NULL` = work_lead créé directement (pas de master), pas de synchro
+  - `FALSE` = lié au master, synchronise le status automatiquement
+  - `TRUE` = personnalisé localement, pas de synchro
 
 ## Commandes
 
@@ -283,3 +287,19 @@ Quand un Coach cree une seance pour un groupe:
    - Creation `session_profile` (equipage = navigant du projet)
 
 Les sessions individuelles heritent: nom, type, dates, location de la session_master.
+
+## Flux propagation des thematiques (work_lead_master -> work_lead)
+
+Quand un Coach associe un work_lead_master a une session_master:
+1. Upsert dans `session_master_work_lead_master` (status + profile_id)
+2. Pour chaque projet lie a la session_master (via session.session_master_id):
+   - Cherche un `work_lead` existant (work_lead.work_lead_master_id = ce master, inclut archives)
+   - Si non trouve: cree le `work_lead` (copie name, content, work_lead_type_id) + partage fichiers via `files_reference`
+   - Upsert dans `session_work_lead`:
+     - Nouvelle entree: `override_master = FALSE`, status = master.status
+     - Entree existante + `override_master = FALSE`: sync status
+     - Entree existante + `override_master = TRUE/NULL`: ignore
+
+Quand un Coach retire un work_lead_master d'une session_master:
+1. Supprime les `session_work_lead` ou `override_master = FALSE`
+2. Supprime l'entree `session_master_work_lead_master`

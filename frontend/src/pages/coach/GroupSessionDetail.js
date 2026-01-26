@@ -542,12 +542,16 @@ function GroupSessionDetail() {
                   </h4>
                   <div className="flex flex-wrap gap-2">
                     {items.map(wlm => (
-                      <span
+                      <button
                         key={wlm.work_lead_master_id}
-                        className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium border ${getStatusColor(wlm.status)}`}
+                        onClick={() => navigate(`/coach/groups/${groupId}/work-leads/${wlm.work_lead_master_id}`)}
+                        className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium border ${getStatusColor(wlm.status)} hover:opacity-80 transition-opacity cursor-pointer`}
                       >
                         {wlm.work_lead_master_name}
-                      </span>
+                        <svg className="w-3.5 h-3.5 ml-1.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -909,9 +913,18 @@ function GroupSessionDetail() {
                           <div className="divide-y divide-gray-100 dark:divide-gray-700">
                             {items.map(wl => (
                               <div key={wl.id} className="px-4 py-3 flex items-center justify-between">
-                                <span className="text-sm text-gray-900 dark:text-white font-medium">
+                                <button
+                                  onClick={() => {
+                                    setShowThematiquesModal(false)
+                                    navigate(`/coach/groups/${groupId}/work-leads/${wl.id}`)
+                                  }}
+                                  className="text-sm text-gray-900 dark:text-white font-medium hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex items-center group"
+                                >
                                   {wl.name}
-                                </span>
+                                  <svg className="w-3.5 h-3.5 ml-1.5 opacity-0 group-hover:opacity-60 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                </button>
                                 <div className="flex items-center space-x-1">
                                   {['TODO', 'WORKING', 'DANGER', 'OK'].map(status => {
                                     const isActive = pendingStatuses[wl.id] === status
