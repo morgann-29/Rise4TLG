@@ -231,6 +231,13 @@ function RichTextEditor({
     }
   })
 
+  // Synchroniser l'etat editable quand readOnly change
+  useEffect(() => {
+    if (editor) {
+      editor.setEditable(!readOnly)
+    }
+  }, [editor, readOnly])
+
   // Synchroniser le contenu resolu avec l'editeur
   const hasInitializedRef = useRef(false)
   useEffect(() => {

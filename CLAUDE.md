@@ -41,6 +41,7 @@ frontend/
       AdminLayout.js      # Layout admin
       SuperCoachLayout.js # Layout super coach
       CoachLayout.js      # Layout coach (menus dynamiques par groupe)
+      ContentEditor/      # Wrapper RichTextEditor avec edit/view mode + autosave
       FileManager/        # Gestion upload/liste fichiers
       RichTextEditor/     # Editeur TipTap avec médias
       LocationPicker/     # Carte Leaflet pour selection de lieu
@@ -220,10 +221,19 @@ cd frontend && npm start
 
 ## Composants Frontend clés
 
+### ContentEditor
+- Wrapper autour de RichTextEditor avec mode édition/lecture
+- Toggle "Modifier" / "Fermer" pour basculer entre les modes
+- Autosave avec debounce configurable (défaut: 3 secondes)
+- Indicateurs de statut visuels (sauvegarde en cours, sauvegardé, erreur, modifications non sauvegardées)
+- Sauvegarde manuelle avec bouton "Sauvegarder"
+- Sauvegarde automatique au passage en mode lecture si modifications
+
 ### RichTextEditor
 - Basé sur TipTap (StarterKit, Image, Link, Placeholder)
 - MediaPicker pour insérer images depuis FileManager
 - Résolution automatique des URLs signées à l'affichage
+- Support dynamique du mode readOnly via setEditable()
 
 ### FileManager
 - Upload drag & drop

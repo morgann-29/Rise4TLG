@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import CoachLayout from '../../components/CoachLayout'
 import FileManager from '../../components/FileManager'
-import RichTextEditor from '../../components/RichTextEditor'
+import ContentEditor from '../../components/ContentEditor'
 import { coachService } from '../../services/coachService'
 
 function GroupSessionDetail() {
@@ -12,12 +12,6 @@ function GroupSessionDetail() {
   const [group, setGroup] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [saving, setSaving] = useState(false)
-  const [saveSuccess, setSaveSuccess] = useState(false)
-
-  const [content, setContent] = useState('')
-  const [hasChanges, setHasChanges] = useState(false)
-  const [isEditing, setIsEditing] = useState(false)
 
   // Modal states
   const [showParticipantsModal, setShowParticipantsModal] = useState(false)
@@ -36,7 +30,6 @@ function GroupSessionDetail() {
   const [thematiquesExpanded, setThematiquesExpanded] = useState(true)
   const [showThematiquesModal, setShowThematiquesModal] = useState(false)
   const [allGroupWorkLeads, setAllGroupWorkLeads] = useState([])
-  const [workLeadTypes, setWorkLeadTypes] = useState([])
   const [thematiquesModalLoading, setThematiquesModalLoading] = useState(false)
   const [collapsedTypes, setCollapsedTypes] = useState({})
   const [pendingStatuses, setPendingStatuses] = useState({}) // { workLeadMasterId: status }
@@ -51,7 +44,6 @@ function GroupSessionDetail() {
       ])
       setSession(sessionData)
       setGroup(groupData)
-      setContent(sessionData.content || '')
       setSessionWorkLeadMasters(workLeadMastersData)
       setError(null)
     } catch (err) {
@@ -66,31 +58,15 @@ function GroupSessionDetail() {
     loadData()
   }, [loadData])
 
-  const handleContentChange = (newContent) => {
-    setContent(newContent)
-    setHasChanges(true)
-    setSaveSuccess(false)
-  }
-
-  const handleSave = async () => {
-    try {
-      setSaving(true)
-      await coachService.updateGroupSession(groupId, sessionId, {
-        name: session.name,
-        type_seance_id: session.type_seance_id,
-        date_start: session.date_start,
-        date_end: session.date_end,
-        content
-      })
-      setHasChanges(false)
-      setSaveSuccess(true)
-      setTimeout(() => setSaveSuccess(false), 3000)
-    } catch (err) {
-      console.error('Erreur sauvegarde:', err)
-      alert(err.response?.data?.detail || 'Erreur lors de la sauvegarde')
-    } finally {
-      setSaving(false)
-    }
+  // Save content handler for ContentEditor
+  const handleSaveContent = async (content) => {
+    await coachService.updateGroupSession(groupId, sessionId, {
+      name: session.name,
+      type_seance_id: session.type_seance_id,
+      date_start: session.date_start,
+      date_end: session.date_end,
+      content
+    })
   }
 
   // Open participants modal
@@ -179,12 +155,8 @@ function GroupSessionDetail() {
     setThematiquesModalLoading(true)
     setShowThematiquesModal(true)
     try {
-      const [workLeads, types] = await Promise.all([
-        coachService.getGroupWorkLeads(groupId, false, false),
-        coachService.getWorkLeadTypes()
-      ])
+      const workLeads = await coachService.getGroupWorkLeads(groupId, false, false)
       setAllGroupWorkLeads(workLeads)
-      setWorkLeadTypes(types)
       // Initialize pending statuses from current session data
       const initialStatuses = {}
       sessionWorkLeadMasters.forEach(wlm => {
@@ -561,90 +533,17 @@ function GroupSessionDetail() {
         </div>
 
         {/* Content Editor */}
-        <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-medium text-gray-900 dark:text-white">
-                  Contenu
-                </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  Notes et compte-rendu de la seance
-                </p>
-              </div>
-              <div className="flex items-center space-x-3">
-                {saveSuccess && (
-                  <span className="text-sm text-green-600 dark:text-green-400 flex items-center">
-                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Sauvegarde
-                  </span>
-                )}
-                {hasChanges && (
-                  <span className="text-sm text-amber-600 dark:text-amber-400">
-                    Modifications non sauvegardees
-                  </span>
-                )}
-                {isEditing ? (
-                  <>
-                    <button
-                      onClick={() => {
-                        setIsEditing(false)
-                      }}
-                      className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
-                    >
-                      Fermer
-                    </button>
-                    <button
-                      onClick={handleSave}
-                      disabled={saving || !hasChanges}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-                    >
-                      {saving ? (
-                        <>
-                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                          </svg>
-                          Sauvegarde...
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                          </svg>
-                          Sauvegarder
-                        </>
-                      )}
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => setIsEditing(true)}
-                    className="px-4 py-2 text-sm font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-900 rounded-lg transition-colors flex items-center"
-                  >
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                    Modifier
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="p-6">
-            <RichTextEditor
-              value={content}
-              onChange={handleContentChange}
-              entityType="session_master"
-              entityId={sessionId}
-              placeholder="Notes de la seance..."
-              minHeight="300px"
-              readOnly={!isEditing}
-            />
-          </div>
-        </div>
+        <ContentEditor
+          value={session.content || ''}
+          onSave={handleSaveContent}
+          entityType="session_master"
+          entityId={sessionId}
+          title="Contenu"
+          description="Notes et compte-rendu de la seance"
+          placeholder="Notes de la seance..."
+          minHeight="300px"
+          autoSaveDelay={3000}
+        />
 
         {/* Files */}
         <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
