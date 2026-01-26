@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import CoachLayout from '../../components/CoachLayout'
 import { coachService } from '../../services/coachService'
 
 function GroupProjects() {
   const { groupId } = useParams()
+  const navigate = useNavigate()
   const [group, setGroup] = useState(null)
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
@@ -76,7 +77,8 @@ function GroupProjects() {
             {projects.map((project) => (
               <div
                 key={project.id}
-                className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg transition-shadow"
+                onClick={() => navigate(`/coach/groups/${groupId}/projects/${project.id}`)}
+                className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg transition-shadow cursor-pointer"
               >
                 <div className="flex items-start">
                   <div className="flex-shrink-0 h-12 w-12 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center">

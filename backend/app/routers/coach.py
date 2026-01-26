@@ -1298,6 +1298,286 @@ async def list_group_projects(
 
 
 # ============================================
+# PROJECT DETAIL (vue Coach sur un projet specifique)
+# ============================================
+
+class ProjectDetail(BaseModel):
+    id: str
+    name: str
+    type_support_name: Optional[str] = None
+    navigant_name: Optional[str] = None
+    navigant_email: Optional[str] = None
+    sessions_count: int = 0
+    work_leads_count: int = 0
+
+
+class ProjectSession(BaseModel):
+    id: str
+    name: str
+    type_seance_id: int
+    type_seance_name: Optional[str] = None
+    type_seance_is_sailing: Optional[bool] = None
+    date_start: Optional[datetime] = None
+    date_end: Optional[datetime] = None
+    location: Optional[dict] = None
+    content: Optional[str] = None
+    is_deleted: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProjectWorkLead(BaseModel):
+    id: str
+    name: str
+    work_lead_type_id: str
+    work_lead_type_name: Optional[str] = None
+    content: Optional[str] = None
+    current_status: str = "NEW"
+    is_deleted: bool = False
+    is_archived: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+
+async def _verify_project_in_group(project_id: str, group_id: str) -> bool:
+    """Verifie que le projet appartient au groupe"""
+    response = supabase_admin.table("group_project")\
+        .select("project_id")\
+        .eq("project_id", project_id)\
+        .eq("group_id", group_id)\
+        .execute()
+    return len(response.data) > 0
+
+
+def _get_current_status_for_work_lead(work_lead_id: str) -> str:
+    """
+    Calcule le statut courant d'un work_lead depuis la table pivot session_work_lead.
+    - Pas d'entree => NEW
+    - Entrees existantes => statut de l'entree la plus recente (updated_at)
+    """
+    try:
+        response = supabase_admin.table("session_work_lead")\
+            .select("status, updated_at")\
+            .eq("work_lead_id", work_lead_id)\
+            .order("updated_at", desc=True)\
+            .limit(1)\
+            .execute()
+
+        if response.data and len(response.data) > 0:
+            return response.data[0]["status"]
+        return "NEW"
+    except:
+        return "NEW"
+
+
+@router.get("/groups/{group_id}/projects/{project_id}", response_model=ProjectDetail)
+async def get_project_detail(
+    group_id: str,
+    project_id: str,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Recupere les details d'un projet avec les compteurs"""
+    try:
+        # Verifier acces au groupe
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Verifier que le projet appartient au groupe
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        # Recuperer le projet avec ses relations
+        response = supabase_admin.table("project")\
+            .select("id, name, type_support(name), profile(user_uid)")\
+            .eq("id", project_id)\
+            .eq("is_deleted", False)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve"
+            )
+
+        project = response.data[0]
+
+        # Recuperer infos navigant
+        navigant_name = None
+        navigant_email = None
+        profile = project.get("profile")
+        if profile and profile.get("user_uid"):
+            user_info = _get_user_info(profile["user_uid"])
+            if user_info.get("first_name") or user_info.get("last_name"):
+                navigant_name = f"{user_info.get('first_name', '')} {user_info.get('last_name', '')}".strip()
+            navigant_email = user_info.get("email")
+
+        # Compter les sessions
+        sessions_count = supabase_admin.table("session")\
+            .select("id", count="exact")\
+            .eq("project_id", project_id)\
+            .eq("is_deleted", False)\
+            .execute()
+
+        # Compter les work_leads
+        work_leads_count = supabase_admin.table("work_lead")\
+            .select("id", count="exact")\
+            .eq("project_id", project_id)\
+            .eq("is_deleted", False)\
+            .eq("is_archived", False)\
+            .execute()
+
+        type_support = project.get("type_support")
+
+        return ProjectDetail(
+            id=project["id"],
+            name=project["name"],
+            type_support_name=type_support.get("name") if type_support else None,
+            navigant_name=navigant_name,
+            navigant_email=navigant_email,
+            sessions_count=sessions_count.count or 0,
+            work_leads_count=work_leads_count.count or 0
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.get("/groups/{group_id}/projects/{project_id}/sessions", response_model=List[ProjectSession])
+async def list_project_sessions(
+    group_id: str,
+    project_id: str,
+    include_deleted: bool = False,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Liste les sessions d'un projet (lecture seule pour le coach)"""
+    try:
+        # Verifier acces au groupe
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Verifier que le projet appartient au groupe
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        query = supabase_admin.table("session")\
+            .select("*, type_seance(name, is_sailing)")\
+            .eq("project_id", project_id)
+
+        if not include_deleted:
+            query = query.eq("is_deleted", False)
+
+        response = query.order("date_start", desc=True).execute()
+
+        sessions = []
+        for s in response.data:
+            type_seance = s.get("type_seance")
+            sessions.append(ProjectSession(
+                id=s["id"],
+                name=s["name"],
+                type_seance_id=s["type_seance_id"],
+                type_seance_name=type_seance.get("name") if type_seance else None,
+                type_seance_is_sailing=type_seance.get("is_sailing") if type_seance else None,
+                date_start=s.get("date_start"),
+                date_end=s.get("date_end"),
+                location=s.get("location"),
+                content=s.get("content"),
+                is_deleted=s.get("is_deleted", False),
+                created_at=s["created_at"],
+                updated_at=s["updated_at"]
+            ))
+
+        return sessions
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.get("/groups/{group_id}/projects/{project_id}/work-leads", response_model=List[ProjectWorkLead])
+async def list_project_work_leads(
+    group_id: str,
+    project_id: str,
+    include_deleted: bool = False,
+    include_archived: bool = False,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Liste les axes de travail d'un projet (lecture seule pour le coach)"""
+    try:
+        # Verifier acces au groupe
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Verifier que le projet appartient au groupe
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        query = supabase_admin.table("work_lead")\
+            .select("*, work_lead_type(name)")\
+            .eq("project_id", project_id)
+
+        if not include_deleted:
+            query = query.eq("is_deleted", False)
+
+        if not include_archived:
+            query = query.eq("is_archived", False)
+
+        response = query.order("name").execute()
+
+        work_leads = []
+        for w in response.data:
+            work_lead_type = w.get("work_lead_type")
+            work_leads.append(ProjectWorkLead(
+                id=w["id"],
+                name=w["name"],
+                work_lead_type_id=w["work_lead_type_id"],
+                work_lead_type_name=work_lead_type.get("name") if work_lead_type else None,
+                content=w.get("content"),
+                current_status=_get_current_status_for_work_lead(w["id"]),
+                is_deleted=w.get("is_deleted", False),
+                is_archived=w.get("is_archived", False),
+                created_at=w["created_at"],
+                updated_at=w["updated_at"]
+            ))
+
+        return work_leads
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+# ============================================
 # TYPE SEANCES (pour dropdowns)
 # ============================================
 

@@ -100,6 +100,28 @@ export const coachService = {
     return response.data
   },
 
+  async getProjectDetail(groupId, projectId) {
+    const response = await api.get(`/api/coach/groups/${groupId}/projects/${projectId}`)
+    return response.data
+  },
+
+  async getProjectSessions(groupId, projectId, includeDeleted = false) {
+    const response = await api.get(`/api/coach/groups/${groupId}/projects/${projectId}/sessions`, {
+      params: { include_deleted: includeDeleted }
+    })
+    return response.data
+  },
+
+  async getProjectWorkLeads(groupId, projectId, includeDeleted = false, includeArchived = false) {
+    const response = await api.get(`/api/coach/groups/${groupId}/projects/${projectId}/work-leads`, {
+      params: {
+        include_deleted: includeDeleted,
+        include_archived: includeArchived
+      }
+    })
+    return response.data
+  },
+
   // ============================================
   // DROPDOWNS
   // ============================================

@@ -63,12 +63,13 @@ frontend/
         CoachDashboard.js, GroupProgrammation.js
         GroupSessions.js, GroupSessionDetail.js
         GroupWorkLeads.js, GroupWorkLeadDetail.js
-        GroupProjects.js
+        GroupProjects.js, GroupProjectDetail.js
       navigant/            # Pages Navigant
         NavigantDashboard.js
         Sessions.js, WorkLeads.js
       shared/              # Pages multi-rôles (layout-agnostic)
         SessionDetail.js, WorkLeadDetail.js
+        ProjectSessions.js, ProjectWorkLeads.js
     services/
       api.js              # Config Axios
       adminService.js     # API admin
@@ -201,6 +202,9 @@ cd frontend && npm start
 - `POST /api/coach/groups/{id}/work-leads/{work_lead_id}/archive` - Archiver axe
 - `POST /api/coach/groups/{id}/work-leads/{work_lead_id}/unarchive` - Désarchiver axe
 - `GET /api/coach/groups/{id}/projects` - Projets du groupe (lecture seule)
+- `GET /api/coach/groups/{id}/projects/{project_id}` - Détail projet avec compteurs sessions/axes
+- `GET /api/coach/groups/{id}/projects/{project_id}/sessions` - Sessions du projet (lecture seule)
+- `GET /api/coach/groups/{id}/projects/{project_id}/work-leads` - Axes de travail du projet (lecture seule)
 - `POST /api/coach/groups/{id}/work-leads/import` - Importer un modèle d'axe dans le groupe
 - `GET /api/coach/type-seances` - Types de séances pour dropdown
 - `GET /api/coach/work-lead-types` - Types d'axes pour dropdown
@@ -297,6 +301,9 @@ cd frontend && npm start
 /coach/groups/:groupId/work-leads
 /coach/groups/:groupId/work-leads/:workLeadId
 /coach/groups/:groupId/projects
+/coach/groups/:groupId/projects/:projectId
+/coach/groups/:groupId/projects/:projectId/sessions
+/coach/groups/:groupId/projects/:projectId/work-leads
 /navigant
 /navigant/project/sessions
 /navigant/project/work-leads

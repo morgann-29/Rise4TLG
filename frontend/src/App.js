@@ -35,6 +35,10 @@ import GroupSessionDetail from './pages/coach/GroupSessionDetail'
 import GroupWorkLeads from './pages/coach/GroupWorkLeads'
 import GroupWorkLeadDetail from './pages/coach/GroupWorkLeadDetail'
 import GroupProjects from './pages/coach/GroupProjects'
+import GroupProjectDetail from './pages/coach/GroupProjectDetail'
+// Shared pages for project-level data
+import ProjectSessions from './pages/shared/ProjectSessions'
+import ProjectWorkLeads from './pages/shared/ProjectWorkLeads'
 
 // Helper pour obtenir la route par defaut selon le profil
 function getDefaultRoute(isAdmin, isSuperCoach, isCoach) {
@@ -311,6 +315,33 @@ function App() {
             element={
               <CoachRoute>
                 <GroupProjects />
+              </CoachRoute>
+            }
+          />
+
+          <Route
+            path="/coach/groups/:groupId/projects/:projectId"
+            element={
+              <CoachRoute>
+                <GroupProjectDetail />
+              </CoachRoute>
+            }
+          />
+
+          <Route
+            path="/coach/groups/:groupId/projects/:projectId/sessions"
+            element={
+              <CoachRoute>
+                <ProjectSessions />
+              </CoachRoute>
+            }
+          />
+
+          <Route
+            path="/coach/groups/:groupId/projects/:projectId/work-leads"
+            element={
+              <CoachRoute>
+                <ProjectWorkLeads />
               </CoachRoute>
             }
           />
