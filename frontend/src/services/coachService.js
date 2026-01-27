@@ -172,6 +172,18 @@ export const coachService = {
     return response.data
   },
 
+  async getProjectWorkLead(groupId, projectId, workLeadId) {
+    const response = await api.get(`/api/coach/groups/${groupId}/projects/${projectId}/work-leads/${workLeadId}`)
+    return response.data
+  },
+
+  async getProjectWorkLeadSessions(groupId, projectId, workLeadId, offset = 0, limit = 10) {
+    const response = await api.get(`/api/coach/groups/${groupId}/projects/${projectId}/work-leads/${workLeadId}/sessions`, {
+      params: { offset, limit }
+    })
+    return response.data
+  },
+
   async createProjectWorkLead(groupId, projectId, data) {
     const response = await api.post(`/api/coach/groups/${groupId}/projects/${projectId}/work-leads`, data)
     return response.data

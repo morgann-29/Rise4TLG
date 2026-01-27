@@ -82,6 +82,13 @@ export const navigantService = {
     return response.data
   },
 
+  async getWorkLeadSessions(projectId, workLeadId, offset = 0, limit = 10) {
+    const response = await api.get(`/api/navigant/projects/${projectId}/work-leads/${workLeadId}/sessions`, {
+      params: { offset, limit }
+    })
+    return response.data
+  },
+
   async createWorkLead(projectId, data) {
     const response = await api.post(`/api/navigant/projects/${projectId}/work-leads`, data)
     return response.data

@@ -210,6 +210,8 @@ cd frontend && npm start
 - `GET /api/coach/groups/{id}/projects/{project_id}/sessions/{session_id}/work-leads` - Work leads de la session
 - `PUT /api/coach/groups/{id}/projects/{project_id}/sessions/{session_id}/work-leads/{work_lead_id}` - Modifier status work lead (status null = supprimer)
 - `GET/POST/PUT/DELETE /api/coach/groups/{id}/projects/{project_id}/work-leads` - Axes de travail du projet
+- `GET /api/coach/groups/{id}/projects/{project_id}/work-leads/{work_lead_id}` - Détail axe projet
+- `GET /api/coach/groups/{id}/projects/{project_id}/work-leads/{work_lead_id}/sessions` - Historique sessions axe projet (paginé)
 - `POST /api/coach/groups/{id}/projects/{project_id}/work-leads/{work_lead_id}/archive` - Archiver axe projet
 - `POST /api/coach/groups/{id}/projects/{project_id}/work-leads/{work_lead_id}/unarchive` - Désarchiver axe projet
 - `POST /api/coach/groups/{id}/projects/{project_id}/work-leads/{work_lead_id}/restore` - Restaurer axe projet supprimé
@@ -231,6 +233,7 @@ cd frontend && npm start
 - `GET /api/navigant/projects/{project_id}/work-leads` - Axes de travail du projet
 - `POST /api/navigant/projects/{project_id}/work-leads` - Créer axe
 - `GET /api/navigant/projects/{project_id}/work-leads/{work_lead_id}` - Détail axe
+- `GET /api/navigant/projects/{project_id}/work-leads/{work_lead_id}/sessions` - Historique sessions axe (paginé)
 - `PUT /api/navigant/projects/{project_id}/work-leads/{work_lead_id}` - Modifier axe
 - `DELETE /api/navigant/projects/{project_id}/work-leads/{work_lead_id}` - Supprimer axe
 - `POST /api/navigant/projects/{project_id}/work-leads/{work_lead_id}/archive` - Archiver axe

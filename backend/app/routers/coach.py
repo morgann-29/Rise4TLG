@@ -95,6 +95,20 @@ class WorkLeadMasterSessionHistoryResponse(BaseModel):
     limit: int
 
 
+class WorkLeadSessionHistoryItem(BaseModel):
+    session_id: str
+    session_name: str
+    date_start: Optional[datetime] = None
+    status: str
+
+
+class WorkLeadSessionHistoryResponse(BaseModel):
+    items: List[WorkLeadSessionHistoryItem]
+    total: int
+    offset: int
+    limit: int
+
+
 class GroupProject(BaseModel):
     id: str
     name: str
@@ -2431,6 +2445,171 @@ async def list_project_work_leads(
             ))
 
         return work_leads
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.get("/groups/{group_id}/projects/{project_id}/work-leads/{work_lead_id}", response_model=ProjectWorkLead)
+async def get_project_work_lead(
+    group_id: str,
+    project_id: str,
+    work_lead_id: str,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Recupere un axe de travail d'un projet"""
+    try:
+        # Verifier acces au groupe
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Verifier que le projet appartient au groupe
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        response = supabase_admin.table("work_lead")\
+            .select("*, work_lead_type(id, name, parent_id)")\
+            .eq("id", work_lead_id)\
+            .eq("project_id", project_id)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Axe de travail non trouve"
+            )
+
+        w = response.data[0]
+        work_lead_type = w.get("work_lead_type")
+
+        # Lookup des types pour resoudre le parent
+        types_lookup = _get_work_lead_types_lookup()
+        parent_id = work_lead_type.get("parent_id") if work_lead_type else None
+        parent_name = None
+        if parent_id and types_lookup.get(parent_id):
+            parent_name = types_lookup[parent_id].get("name")
+
+        return ProjectWorkLead(
+            id=w["id"],
+            name=w["name"],
+            work_lead_type_id=w["work_lead_type_id"],
+            work_lead_type_name=work_lead_type.get("name") if work_lead_type else None,
+            work_lead_type_parent_id=parent_id,
+            work_lead_type_parent_name=parent_name,
+            content=w.get("content"),
+            current_status=_get_current_status_for_work_lead(w["id"]),
+            is_deleted=w.get("is_deleted", False),
+            is_archived=w.get("is_archived", False),
+            created_at=w["created_at"],
+            updated_at=w["updated_at"]
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.get("/groups/{group_id}/projects/{project_id}/work-leads/{work_lead_id}/sessions", response_model=WorkLeadSessionHistoryResponse)
+async def get_project_work_lead_sessions(
+    group_id: str,
+    project_id: str,
+    work_lead_id: str,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=50),
+    user: CurrentUser = Depends(require_coach)
+):
+    """Recuperer l'historique des sessions pour un axe de travail d'un projet"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Verifier que le projet appartient au groupe
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        # Verify work_lead exists and belongs to project
+        wl_check = supabase_admin.table("work_lead")\
+            .select("id")\
+            .eq("id", work_lead_id)\
+            .eq("project_id", project_id)\
+            .execute()
+
+        if not wl_check.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Axe de travail non trouve"
+            )
+
+        # Get all session_ids and statuses from pivot table
+        pivot_response = supabase_admin.table("session_work_lead")\
+            .select("session_id, status")\
+            .eq("work_lead_id", work_lead_id)\
+            .execute()
+
+        if not pivot_response.data:
+            return WorkLeadSessionHistoryResponse(
+                items=[],
+                total=0,
+                offset=offset,
+                limit=limit
+            )
+
+        session_ids = [p["session_id"] for p in pivot_response.data]
+        status_map = {p["session_id"]: p["status"] for p in pivot_response.data}
+
+        # Get total count (excluding deleted sessions)
+        count_response = supabase_admin.table("session")\
+            .select("id", count="exact")\
+            .in_("id", session_ids)\
+            .eq("is_deleted", False)\
+            .execute()
+        total = count_response.count or 0
+
+        # Get sessions ordered by date_start DESC with pagination
+        sessions_response = supabase_admin.table("session")\
+            .select("id, name, date_start")\
+            .in_("id", session_ids)\
+            .eq("is_deleted", False)\
+            .order("date_start", desc=True, nullsfirst=False)\
+            .range(offset, offset + limit - 1)\
+            .execute()
+
+        items = []
+        for s in sessions_response.data:
+            items.append(WorkLeadSessionHistoryItem(
+                session_id=s["id"],
+                session_name=s.get("name") or "Sans nom",
+                date_start=s.get("date_start"),
+                status=status_map.get(s["id"], "TODO")
+            ))
+
+        return WorkLeadSessionHistoryResponse(
+            items=items,
+            total=total,
+            offset=offset,
+            limit=limit
+        )
 
     except HTTPException:
         raise
