@@ -1631,17 +1631,25 @@ def _get_session_crew(session_id: str) -> List[CoachCrewMember]:
     """Recupere l'equipage d'une session"""
     try:
         response = supabase_admin.table("session_profile")\
-            .select("profile_id, profile(name, email)")\
+            .select("profile_id, profile(user_uid)")\
             .eq("session_id", session_id)\
             .execute()
 
         crew = []
         for sp in response.data:
             profile = sp.get("profile", {})
+            user_uid = profile.get("user_uid") if profile else None
+            name = None
+            email = None
+            if user_uid:
+                user_info = _get_user_info(user_uid)
+                if user_info.get("first_name") or user_info.get("last_name"):
+                    name = f"{user_info.get('first_name', '')} {user_info.get('last_name', '')}".strip()
+                email = user_info.get("email")
             crew.append(CoachCrewMember(
                 profile_id=sp["profile_id"],
-                name=profile.get("name") if profile else None,
-                email=profile.get("email") if profile else None
+                name=name,
+                email=email
             ))
         return crew
     except:
@@ -2010,10 +2018,26 @@ async def create_project_session(
                 detail="Erreur creation session"
             )
 
+        session_id = response.data[0]["id"]
+
+        # Ajouter l'equipage initial (le navigant du projet)
+        project_response = supabase_admin.table("project")\
+            .select("profile_id")\
+            .eq("id", project_id)\
+            .execute()
+
+        if project_response.data and project_response.data[0].get("profile_id"):
+            supabase_admin.table("session_profile")\
+                .insert({
+                    "session_id": session_id,
+                    "profile_id": project_response.data[0]["profile_id"]
+                })\
+                .execute()
+
         # Recuperer avec jointure
         session = supabase_admin.table("session")\
             .select("*, type_seance(name, is_sailing)")\
-            .eq("id", response.data[0]["id"])\
+            .eq("id", session_id)\
             .execute()
 
         s = session.data[0]

@@ -240,16 +240,35 @@ def _get_work_lead_types_lookup() -> dict:
         return {}
 
 
+def _get_user_info(user_uid: str) -> dict:
+    """Recupere les infos utilisateur depuis auth.users"""
+    try:
+        user_response = supabase_admin.auth.admin.get_user_by_id(user_uid)
+        if user_response and user_response.user:
+            metadata = user_response.user.user_metadata or {}
+            return {
+                "email": user_response.user.email,
+                "first_name": metadata.get("first_name"),
+                "last_name": metadata.get("last_name")
+            }
+    except:
+        pass
+    return {"email": None, "first_name": None, "last_name": None}
+
+
 def _get_profile_name(profile_id: str) -> Optional[str]:
     """Recupere le nom d'un profil"""
     try:
         response = supabase_admin.table("profile")\
-            .select("name, email")\
+            .select("user_uid")\
             .eq("id", profile_id)\
             .limit(1)\
             .execute()
-        if response.data:
-            return response.data[0].get("name") or response.data[0].get("email")
+        if response.data and response.data[0].get("user_uid"):
+            user_info = _get_user_info(response.data[0]["user_uid"])
+            if user_info.get("first_name") or user_info.get("last_name"):
+                return f"{user_info.get('first_name', '')} {user_info.get('last_name', '')}".strip()
+            return user_info.get("email")
         return None
     except:
         return None
@@ -259,17 +278,25 @@ def _get_session_crew(session_id: str) -> List[CrewMember]:
     """Recupere l'equipage d'une session"""
     try:
         response = supabase_admin.table("session_profile")\
-            .select("profile_id, profile(name, email)")\
+            .select("profile_id, profile(user_uid)")\
             .eq("session_id", session_id)\
             .execute()
 
         crew = []
         for sp in response.data:
             profile = sp.get("profile", {})
+            user_uid = profile.get("user_uid") if profile else None
+            name = None
+            email = None
+            if user_uid:
+                user_info = _get_user_info(user_uid)
+                if user_info.get("first_name") or user_info.get("last_name"):
+                    name = f"{user_info.get('first_name', '')} {user_info.get('last_name', '')}".strip()
+                email = user_info.get("email")
             crew.append(CrewMember(
                 profile_id=sp["profile_id"],
-                name=profile.get("name") if profile else None,
-                email=profile.get("email") if profile else None
+                name=name,
+                email=email
             ))
         return crew
     except:
