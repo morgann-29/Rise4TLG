@@ -62,10 +62,12 @@ function GroupWorkLeads() {
     }
   }
 
-  // Group work leads by type
+  // Group work leads by type (with parent name if exists)
   const groupedWorkLeads = workLeads.reduce((acc, item) => {
     const typeId = item.work_lead_type_id || 'no-type'
-    const typeName = item.work_lead_type_name || 'Sans type'
+    const typeName = item.work_lead_type_parent_name
+      ? `${item.work_lead_type_parent_name} - ${item.work_lead_type_name}`
+      : (item.work_lead_type_name || 'Sans type')
     if (!acc[typeId]) {
       acc[typeId] = { name: typeName, items: [] }
     }
@@ -504,7 +506,7 @@ function GroupWorkLeads() {
                     <option value="">Selectionnez un type</option>
                     {workLeadTypes.map((type) => (
                       <option key={type.id} value={type.id}>
-                        {type.name}
+                        {type.parent_name ? `${type.parent_name} - ${type.name}` : type.name}
                       </option>
                     ))}
                   </select>
@@ -587,7 +589,9 @@ function GroupWorkLeads() {
                           {model.name}
                         </div>
                         <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {model.work_lead_type_name || 'Sans type'}
+                          {model.work_lead_type_parent_name
+                            ? `${model.work_lead_type_parent_name} - ${model.work_lead_type_name}`
+                            : (model.work_lead_type_name || 'Sans type')}
                           {model.current_status && (
                             <span className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${STATUS_CONFIG[model.current_status]?.bgClass || ''} ${STATUS_CONFIG[model.current_status]?.textClass || ''}`}>
                               {STATUS_CONFIG[model.current_status]?.label || model.current_status}

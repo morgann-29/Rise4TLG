@@ -77,10 +77,12 @@ function ProjectWorkLeads() {
     }
   }
 
-  // Group work leads by type
+  // Group work leads by type (with parent name if exists)
   const groupedWorkLeads = workLeads.reduce((acc, item) => {
     const typeId = item.work_lead_type_id || 'no-type'
-    const typeName = item.work_lead_type_name || 'Sans type'
+    const typeName = item.work_lead_type_parent_name
+      ? `${item.work_lead_type_parent_name} - ${item.work_lead_type_name}`
+      : (item.work_lead_type_name || 'Sans type')
     if (!acc[typeId]) {
       acc[typeId] = { name: typeName, items: [] }
     }
@@ -520,7 +522,7 @@ function ProjectWorkLeads() {
                     <option value="">Selectionnez un type</option>
                     {workLeadTypes.map((type) => (
                       <option key={type.id} value={type.id}>
-                        {type.name}
+                        {type.parent_name ? `${type.parent_name} - ${type.name}` : type.name}
                       </option>
                     ))}
                   </select>

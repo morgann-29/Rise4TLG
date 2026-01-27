@@ -29,17 +29,38 @@ def _get_current_status(work_lead_master_id: str) -> str:
         return "NEW"
 
 
-def _enrich_work_lead_master(data: dict) -> dict:
-    """Enrichit un work_lead_master avec le nom du type et le statut courant"""
+def _enrich_work_lead_master(data: dict, types_lookup: dict = None) -> dict:
+    """Enrichit un work_lead_master avec le nom du type, le parent et le statut courant"""
     if data.get("work_lead_type"):
         data["work_lead_type_name"] = data["work_lead_type"].get("name")
+        data["work_lead_type_parent_id"] = data["work_lead_type"].get("parent_id")
     if "work_lead_type" in data:
         del data["work_lead_type"]
+
+    # Ajouter le parent_name si types_lookup fourni
+    if types_lookup and data.get("work_lead_type_parent_id"):
+        parent_type = types_lookup.get(data["work_lead_type_parent_id"])
+        data["work_lead_type_parent_name"] = parent_type.get("name") if parent_type else None
+    else:
+        data["work_lead_type_parent_name"] = None
 
     # Calculer le statut courant depuis la table pivot
     data["current_status"] = _get_current_status(data["id"])
 
     return data
+
+
+def _get_types_lookup() -> dict:
+    """Recupere tous les types d'axes de travail pour le lookup des parents"""
+    try:
+        response = supabase_admin.table("work_lead_type")\
+            .select("id, name, parent_id")\
+            .is_("project_id", "null")\
+            .eq("is_deleted", False)\
+            .execute()
+        return {t["id"]: t for t in response.data}
+    except:
+        return {}
 
 
 @router.get("/models", response_model=List[WorkLeadMasterResponse])
@@ -54,7 +75,7 @@ async def list_models(
     """
     try:
         query = supabase_admin.table("work_lead_master")\
-            .select("*, work_lead_type(name)")\
+            .select("*, work_lead_type(id, name, parent_id)")\
             .is_("group_id", "null")
 
         if not include_deleted:
@@ -65,9 +86,12 @@ async def list_models(
 
         response = query.order("name").execute()
 
+        # Lookup des types pour resoudre les parents
+        types_lookup = _get_types_lookup()
+
         models = []
         for m in response.data:
-            models.append(_enrich_work_lead_master(m))
+            models.append(_enrich_work_lead_master(m, types_lookup))
 
         return models
 
@@ -86,7 +110,7 @@ async def get_model(
     """Recuperer un modele d'axe de travail par ID"""
     try:
         response = supabase_admin.table("work_lead_master")\
-            .select("*, work_lead_type(name)")\
+            .select("*, work_lead_type(id, name, parent_id)")\
             .eq("id", model_id)\
             .is_("group_id", "null")\
             .execute()
@@ -97,7 +121,10 @@ async def get_model(
                 detail="Modele non trouve"
             )
 
-        return _enrich_work_lead_master(response.data[0])
+        # Lookup des types pour resoudre le parent
+        types_lookup = _get_types_lookup()
+
+        return _enrich_work_lead_master(response.data[0], types_lookup)
 
     except HTTPException:
         raise

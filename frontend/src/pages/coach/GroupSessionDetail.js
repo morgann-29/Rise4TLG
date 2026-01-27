@@ -274,12 +274,14 @@ function GroupSessionDetail() {
     }
   }
 
-  // Group work leads by type
+  // Group work leads by type (with parent name if exists)
   const groupByType = (workLeads) => {
     const grouped = {}
     workLeads.forEach(wl => {
       const typeId = wl.work_lead_type_id
-      const typeName = wl.work_lead_type_name || 'Sans type'
+      const typeName = wl.work_lead_type_parent_name
+        ? `${wl.work_lead_type_parent_name} - ${wl.work_lead_type_name}`
+        : (wl.work_lead_type_name || 'Sans type')
       if (!grouped[typeId]) {
         grouped[typeId] = { name: typeName, items: [] }
       }

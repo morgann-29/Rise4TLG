@@ -261,11 +261,14 @@ CREATE TABLE IF NOT EXISTS work_lead_type (
     name TEXT NOT NULL,
     project_id UUID REFERENCES project(id) ON DELETE CASCADE,
     -- nullable = type global
+    parent_id UUID REFERENCES work_lead_type(id) ON DELETE SET NULL,
+    -- nullable = type racine (un seul niveau de hiérarchie)
     is_deleted BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 CREATE INDEX idx_work_lead_type_project_id ON work_lead_type(project_id);
+CREATE INDEX idx_work_lead_type_parent_id ON work_lead_type(parent_id);
 CREATE INDEX idx_work_lead_type_is_deleted ON work_lead_type(is_deleted)
 WHERE is_deleted = FALSE;
 CREATE TRIGGER update_work_lead_type_updated_at BEFORE

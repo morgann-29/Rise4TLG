@@ -8,7 +8,7 @@ function TypeWorkLeads() {
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
-  const [formData, setFormData] = useState({ name: '' })
+  const [formData, setFormData] = useState({ name: '', parent_id: '' })
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError] = useState(null)
   const [showDeleted, setShowDeleted] = useState(false)
@@ -43,7 +43,7 @@ function TypeWorkLeads() {
       }
       setShowModal(false)
       setEditingItem(null)
-      setFormData({ name: '' })
+      setFormData({ name: '', parent_id: '' })
       await loadItems()
     } catch (err) {
       setActionError(err.response?.data?.detail || 'Erreur lors de l\'operation')
@@ -73,17 +73,32 @@ function TypeWorkLeads() {
 
   const openCreateModal = () => {
     setEditingItem(null)
-    setFormData({ name: '' })
+    setFormData({ name: '', parent_id: '' })
     setActionError(null)
     setShowModal(true)
   }
 
   const openEditModal = (item) => {
     setEditingItem(item)
-    setFormData({ name: item.name })
+    setFormData({ name: item.name, parent_id: item.parent_id || '' })
     setActionError(null)
     setShowModal(true)
   }
+
+  // Helper: obtenir le nom complet avec parent
+  const getFullName = (item) => {
+    if (item.parent_name) {
+      return `${item.parent_name} - ${item.name}`
+    }
+    return item.name
+  }
+
+  // Types disponibles comme parent (racines sans parent, non supprimes, et pas l'item en cours d'edition)
+  const availableParents = items.filter(t =>
+    !t.parent_id &&
+    !t.is_deleted &&
+    (!editingItem || t.id !== editingItem.id)
+  )
 
   if (loading) {
     return (
@@ -140,6 +155,9 @@ function TypeWorkLeads() {
                   Nom
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Categorie parente
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Statut
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
@@ -157,6 +175,15 @@ function TypeWorkLeads() {
                     <div className="text-sm font-medium text-gray-900 dark:text-white">
                       {item.name}
                     </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {item.parent_name ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                        {item.parent_name}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 dark:text-gray-500">-</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {item.is_deleted ? (
@@ -212,7 +239,7 @@ function TypeWorkLeads() {
               ))}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan="4" className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan="5" className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
                     Aucun type d'axe de travail
                   </td>
                 </tr>
@@ -249,6 +276,26 @@ function TypeWorkLeads() {
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
                     placeholder="Ex: Technique, Tactique, Physique..."
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Categorie parente
+                  </label>
+                  <select
+                    value={formData.parent_id}
+                    onChange={(e) => setFormData({ ...formData, parent_id: e.target.value || null })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Aucune (type principal)</option>
+                    {availableParents.map((type) => (
+                      <option key={type.id} value={type.id}>
+                        {type.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Selectionnez une categorie parente pour creer une sous-categorie
+                  </p>
                 </div>
                 <div className="flex justify-end space-x-3 pt-4">
                   <button

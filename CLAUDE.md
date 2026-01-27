@@ -97,7 +97,7 @@ profile -----> type_profile (Admin=1, Super Coach=2, Coach=3, Navigant=4)
     v (profile_id)                         v
 project -----> type_support           group_project (pivot)
     |
-    +-----> work_lead -----> work_lead_type
+    +-----> work_lead -----> work_lead_type (avec parent_id optionnel pour sous-catégories)
     |
     +-----> project_session_master (pivot) -----> session_master (sessions de groupe)
     |                                                  |
@@ -142,6 +142,7 @@ files_reference (partage de fichiers entre entités)
 - **Tables metier**: UUID pour les id
 - **Soft delete**: champ `is_deleted` (boolean, default false)
 - **Archivage**: champ `is_archived` (boolean) pour work_lead_master et work_lead
+- **Hiérarchie work_lead_type**: `parent_id` (UUID nullable) pour créer des sous-catégories. **Un seul niveau** autorisé (parent → enfant, pas plus). Les types parents et enfants peuvent tous deux être assignés aux work_leads. Affichage frontend: `{parent_name} - {name}`
 - **Status work_lead**: le statut est stocké dans les tables pivots (`session_master_work_lead_master`, `session_work_lead`) avec enum (TODO, WORKING, DANGER, OK). Le `current_status` est calculé : pas d'entrée pivot = NEW, sinon = statut de l'entrée la plus récente
 - **Override master**: `session_work_lead.override_master` (BOOLEAN nullable) contrôle la synchronisation:
   - `NULL` = work_lead créé directement (pas de master), pas de synchro
@@ -338,6 +339,7 @@ cd frontend && npm start
 - Triggers auto `updated_at` sur toutes les tables
 - Trigger `check_project_owner_is_navigant()` - Projets doivent appartenir à Navigant
 - Trigger `check_session_master_coach_is_coach()` - Coach session doit être Coach
+- Les réponses API work_lead incluent `work_lead_type_parent_id` et `work_lead_type_parent_name` pour l'affichage hiérarchique
 
 ## Flux creation de seance (Coach)
 

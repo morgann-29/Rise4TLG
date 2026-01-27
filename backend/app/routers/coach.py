@@ -65,6 +65,8 @@ class GroupWorkLead(BaseModel):
     name: str
     work_lead_type_id: str
     work_lead_type_name: Optional[str] = None
+    work_lead_type_parent_id: Optional[str] = None
+    work_lead_type_parent_name: Optional[str] = None
     content: Optional[str] = None
     current_status: str = "NEW"  # NEW, TODO, WORKING, DANGER, OK - derive de la table pivot
     is_deleted: bool = False
@@ -134,6 +136,19 @@ def _get_coach_name(profile_id: Optional[str]) -> Optional[str]:
     except:
         pass
     return None
+
+
+def _get_work_lead_types_lookup() -> dict:
+    """Recupere tous les types d'axes de travail pour le lookup des parents"""
+    try:
+        response = supabase_admin.table("work_lead_type")\
+            .select("id, name, parent_id")\
+            .is_("project_id", "null")\
+            .eq("is_deleted", False)\
+            .execute()
+        return {t["id"]: t for t in response.data}
+    except:
+        return {}
 
 
 def _get_session_projects(session_master_id: str) -> list:
@@ -921,7 +936,7 @@ async def list_group_work_leads(
             )
 
         query = supabase_admin.table("work_lead_master")\
-            .select("*, work_lead_type(name)")\
+            .select("*, work_lead_type(id, name, parent_id)")\
             .eq("group_id", group_id)
 
         if not include_deleted:
@@ -932,14 +947,24 @@ async def list_group_work_leads(
 
         response = query.order("name").execute()
 
+        # Lookup des types pour resoudre les parents
+        types_lookup = _get_work_lead_types_lookup()
+
         work_leads = []
         for w in response.data:
             work_lead_type = w.get("work_lead_type")
+            parent_id = work_lead_type.get("parent_id") if work_lead_type else None
+            parent_name = None
+            if parent_id and types_lookup.get(parent_id):
+                parent_name = types_lookup[parent_id].get("name")
+
             work_leads.append(GroupWorkLead(
                 id=w["id"],
                 name=w["name"],
                 work_lead_type_id=w["work_lead_type_id"],
                 work_lead_type_name=work_lead_type.get("name") if work_lead_type else None,
+                work_lead_type_parent_id=parent_id,
+                work_lead_type_parent_name=parent_name,
                 content=w.get("content"),
                 current_status=_get_current_status_for_work_lead_master(w["id"]),
                 is_deleted=w.get("is_deleted", False),
@@ -1005,18 +1030,27 @@ async def create_group_work_lead(
 
         # Recuperer avec jointure
         work_lead = supabase_admin.table("work_lead_master")\
-            .select("*, work_lead_type(name)")\
+            .select("*, work_lead_type(id, name, parent_id)")\
             .eq("id", response.data[0]["id"])\
             .execute()
 
         w = work_lead.data[0]
         work_lead_type = w.get("work_lead_type")
 
+        # Lookup des types pour resoudre le parent
+        types_lookup = _get_work_lead_types_lookup()
+        parent_id = work_lead_type.get("parent_id") if work_lead_type else None
+        parent_name = None
+        if parent_id and types_lookup.get(parent_id):
+            parent_name = types_lookup[parent_id].get("name")
+
         return GroupWorkLead(
             id=w["id"],
             name=w["name"],
             work_lead_type_id=w["work_lead_type_id"],
             work_lead_type_name=work_lead_type.get("name") if work_lead_type else None,
+            work_lead_type_parent_id=parent_id,
+            work_lead_type_parent_name=parent_name,
             content=w.get("content"),
             current_status="NEW",  # Nouveau = pas d'entree pivot = NEW
             is_deleted=w.get("is_deleted", False),
@@ -1049,7 +1083,7 @@ async def get_group_work_lead(
             )
 
         response = supabase_admin.table("work_lead_master")\
-            .select("*, work_lead_type(name)")\
+            .select("*, work_lead_type(id, name, parent_id)")\
             .eq("id", work_lead_id)\
             .eq("group_id", group_id)\
             .execute()
@@ -1063,11 +1097,20 @@ async def get_group_work_lead(
         w = response.data[0]
         work_lead_type = w.get("work_lead_type")
 
+        # Lookup des types pour resoudre le parent
+        types_lookup = _get_work_lead_types_lookup()
+        parent_id = work_lead_type.get("parent_id") if work_lead_type else None
+        parent_name = None
+        if parent_id and types_lookup.get(parent_id):
+            parent_name = types_lookup[parent_id].get("name")
+
         return GroupWorkLead(
             id=w["id"],
             name=w["name"],
             work_lead_type_id=w["work_lead_type_id"],
             work_lead_type_name=work_lead_type.get("name") if work_lead_type else None,
+            work_lead_type_parent_id=parent_id,
+            work_lead_type_parent_name=parent_name,
             content=w.get("content"),
             current_status=_get_current_status_for_work_lead_master(w["id"]),
             is_deleted=w.get("is_deleted", False),
@@ -1372,6 +1415,8 @@ class ProjectWorkLead(BaseModel):
     name: str
     work_lead_type_id: str
     work_lead_type_name: Optional[str] = None
+    work_lead_type_parent_id: Optional[str] = None
+    work_lead_type_parent_name: Optional[str] = None
     content: Optional[str] = None
     current_status: str = "NEW"
     is_deleted: bool = False
@@ -1405,6 +1450,8 @@ class CoachSessionWorkLeadItem(BaseModel):
     work_lead_name: str
     work_lead_type_id: Optional[str] = None
     work_lead_type_name: Optional[str] = None
+    work_lead_type_parent_id: Optional[str] = None
+    work_lead_type_parent_name: Optional[str] = None
     work_lead_master_id: Optional[str] = None
     status: Optional[str] = None
     override_master: Optional[bool] = None
@@ -1489,14 +1536,22 @@ def _get_session_work_leads_for_project(session_id: str) -> List[CoachSessionWor
     """Recupere les work_leads associes a une session avec leur status"""
     try:
         response = supabase_admin.table("session_work_lead")\
-            .select("*, work_lead(id, name, work_lead_type_id, work_lead_master_id, work_lead_type(name))")\
+            .select("*, work_lead(id, name, work_lead_type_id, work_lead_master_id, work_lead_type(id, name, parent_id))")\
             .eq("session_id", session_id)\
             .execute()
+
+        # Lookup des types pour resoudre les parents
+        types_lookup = _get_work_lead_types_lookup()
 
         items = []
         for swl in response.data:
             wl = swl.get("work_lead", {})
             wlt = wl.get("work_lead_type", {}) if wl else {}
+            parent_id = wlt.get("parent_id") if wlt else None
+            parent_name = None
+            if parent_id and types_lookup.get(parent_id):
+                parent_name = types_lookup[parent_id].get("name")
+
             # session_work_lead n'a pas d'id propre, on utilise une cle composite
             composite_id = f"{swl['session_id']}_{swl['work_lead_id']}"
             items.append(CoachSessionWorkLeadItem(
@@ -1505,6 +1560,8 @@ def _get_session_work_leads_for_project(session_id: str) -> List[CoachSessionWor
                 work_lead_name=wl.get("name", "") if wl else "",
                 work_lead_type_id=wl.get("work_lead_type_id") if wl else None,
                 work_lead_type_name=wlt.get("name") if wlt else None,
+                work_lead_type_parent_id=parent_id,
+                work_lead_type_parent_name=parent_name,
                 work_lead_master_id=wl.get("work_lead_master_id") if wl else None,
                 status=swl["status"],
                 override_master=swl.get("override_master")
@@ -2164,7 +2221,7 @@ async def update_project_session_work_lead(
 
         # Recuperer et retourner l'item mis a jour
         result = supabase_admin.table("session_work_lead")\
-            .select("*, work_lead(id, name, work_lead_type_id, work_lead_master_id, work_lead_type(name))")\
+            .select("*, work_lead(id, name, work_lead_type_id, work_lead_master_id, work_lead_type(id, name, parent_id))")\
             .eq("session_id", session_id)\
             .eq("work_lead_id", work_lead_id)\
             .execute()
@@ -2180,12 +2237,21 @@ async def update_project_session_work_lead(
         wlt = wl.get("work_lead_type", {}) if wl else {}
         composite_id = f"{swl['session_id']}_{swl['work_lead_id']}"
 
+        # Lookup des types pour resoudre le parent
+        types_lookup = _get_work_lead_types_lookup()
+        parent_id = wlt.get("parent_id") if wlt else None
+        parent_name = None
+        if parent_id and types_lookup.get(parent_id):
+            parent_name = types_lookup[parent_id].get("name")
+
         return CoachSessionWorkLeadItem(
             id=composite_id,
             work_lead_id=swl["work_lead_id"],
             work_lead_name=wl.get("name", "") if wl else "",
             work_lead_type_id=wl.get("work_lead_type_id") if wl else None,
             work_lead_type_name=wlt.get("name") if wlt else None,
+            work_lead_type_parent_id=parent_id,
+            work_lead_type_parent_name=parent_name,
             work_lead_master_id=wl.get("work_lead_master_id") if wl else None,
             status=swl["status"],
             override_master=swl.get("override_master")
@@ -2225,7 +2291,7 @@ async def list_project_work_leads(
             )
 
         query = supabase_admin.table("work_lead")\
-            .select("*, work_lead_type(name)")\
+            .select("*, work_lead_type(id, name, parent_id)")\
             .eq("project_id", project_id)
 
         if not include_deleted:
@@ -2236,14 +2302,24 @@ async def list_project_work_leads(
 
         response = query.order("name").execute()
 
+        # Lookup des types pour resoudre les parents
+        types_lookup = _get_work_lead_types_lookup()
+
         work_leads = []
         for w in response.data:
             work_lead_type = w.get("work_lead_type")
+            parent_id = work_lead_type.get("parent_id") if work_lead_type else None
+            parent_name = None
+            if parent_id and types_lookup.get(parent_id):
+                parent_name = types_lookup[parent_id].get("name")
+
             work_leads.append(ProjectWorkLead(
                 id=w["id"],
                 name=w["name"],
                 work_lead_type_id=w["work_lead_type_id"],
                 work_lead_type_name=work_lead_type.get("name") if work_lead_type else None,
+                work_lead_type_parent_id=parent_id,
+                work_lead_type_parent_name=parent_name,
                 content=w.get("content"),
                 current_status=_get_current_status_for_work_lead(w["id"]),
                 is_deleted=w.get("is_deleted", False),
@@ -2322,18 +2398,27 @@ async def create_project_work_lead(
 
         # Recuperer avec jointure
         work_lead = supabase_admin.table("work_lead")\
-            .select("*, work_lead_type(name)")\
+            .select("*, work_lead_type(id, name, parent_id)")\
             .eq("id", response.data[0]["id"])\
             .execute()
 
         w = work_lead.data[0]
         work_lead_type = w.get("work_lead_type")
 
+        # Lookup des types pour resoudre le parent
+        types_lookup = _get_work_lead_types_lookup()
+        parent_id = work_lead_type.get("parent_id") if work_lead_type else None
+        parent_name = None
+        if parent_id and types_lookup.get(parent_id):
+            parent_name = types_lookup[parent_id].get("name")
+
         return ProjectWorkLead(
             id=w["id"],
             name=w["name"],
             work_lead_type_id=w["work_lead_type_id"],
             work_lead_type_name=work_lead_type.get("name") if work_lead_type else None,
+            work_lead_type_parent_id=parent_id,
+            work_lead_type_parent_name=parent_name,
             content=w.get("content"),
             current_status="NEW",
             is_deleted=w.get("is_deleted", False),
@@ -2394,18 +2479,27 @@ async def update_project_work_lead(
 
         # Recuperer avec jointure
         work_lead = supabase_admin.table("work_lead")\
-            .select("*, work_lead_type(name)")\
+            .select("*, work_lead_type(id, name, parent_id)")\
             .eq("id", work_lead_id)\
             .execute()
 
         w = work_lead.data[0]
         work_lead_type = w.get("work_lead_type")
 
+        # Lookup des types pour resoudre le parent
+        types_lookup = _get_work_lead_types_lookup()
+        parent_id = work_lead_type.get("parent_id") if work_lead_type else None
+        parent_name = None
+        if parent_id and types_lookup.get(parent_id):
+            parent_name = types_lookup[parent_id].get("name")
+
         return ProjectWorkLead(
             id=w["id"],
             name=w["name"],
             work_lead_type_id=w["work_lead_type_id"],
             work_lead_type_name=work_lead_type.get("name") if work_lead_type else None,
+            work_lead_type_parent_id=parent_id,
+            work_lead_type_parent_name=parent_name,
             content=w.get("content"),
             current_status=_get_current_status_for_work_lead(w["id"]),
             is_deleted=w.get("is_deleted", False),
@@ -2668,6 +2762,8 @@ class WorkLeadModel(BaseModel):
     name: str
     work_lead_type_id: str
     work_lead_type_name: Optional[str] = None
+    work_lead_type_parent_id: Optional[str] = None
+    work_lead_type_parent_name: Optional[str] = None
     content: Optional[str] = None
     current_status: str = "NEW"  # NEW, TODO, WORKING, DANGER, OK - derive de la table pivot
     created_at: datetime
@@ -2683,21 +2779,31 @@ async def list_work_lead_models(user: CurrentUser = Depends(require_coach)):
     """Liste les modeles d'axes de travail disponibles pour import (group_id=NULL)"""
     try:
         response = supabase_admin.table("work_lead_master")\
-            .select("*, work_lead_type(name)")\
+            .select("*, work_lead_type(id, name, parent_id)")\
             .is_("group_id", "null")\
             .eq("is_deleted", False)\
             .eq("is_archived", False)\
             .order("name")\
             .execute()
 
+        # Lookup des types pour resoudre les parents
+        types_lookup = _get_work_lead_types_lookup()
+
         models = []
         for m in response.data:
             work_lead_type = m.get("work_lead_type")
+            parent_id = work_lead_type.get("parent_id") if work_lead_type else None
+            parent_name = None
+            if parent_id and types_lookup.get(parent_id):
+                parent_name = types_lookup[parent_id].get("name")
+
             models.append(WorkLeadModel(
                 id=m["id"],
                 name=m["name"],
                 work_lead_type_id=m["work_lead_type_id"],
                 work_lead_type_name=work_lead_type.get("name") if work_lead_type else None,
+                work_lead_type_parent_id=parent_id,
+                work_lead_type_parent_name=parent_name,
                 content=m.get("content"),
                 current_status=_get_current_status_for_work_lead_master(m["id"]),
                 created_at=m["created_at"],
@@ -2785,18 +2891,27 @@ async def import_work_lead_model(
 
         # Recuperer l'axe cree avec jointure
         work_lead = supabase_admin.table("work_lead_master")\
-            .select("*, work_lead_type(name)")\
+            .select("*, work_lead_type(id, name, parent_id)")\
             .eq("id", new_work_lead_id)\
             .execute()
 
         w = work_lead.data[0]
         work_lead_type = w.get("work_lead_type")
 
+        # Lookup des types pour resoudre le parent
+        types_lookup = _get_work_lead_types_lookup()
+        parent_id = work_lead_type.get("parent_id") if work_lead_type else None
+        parent_name = None
+        if parent_id and types_lookup.get(parent_id):
+            parent_name = types_lookup[parent_id].get("name")
+
         return GroupWorkLead(
             id=w["id"],
             name=w["name"],
             work_lead_type_id=w["work_lead_type_id"],
             work_lead_type_name=work_lead_type.get("name") if work_lead_type else None,
+            work_lead_type_parent_id=parent_id,
+            work_lead_type_parent_name=parent_name,
             content=w.get("content"),
             current_status="NEW",  # Import = nouveau = pas d'entree pivot = NEW
             is_deleted=w.get("is_deleted", False),
@@ -3051,6 +3166,8 @@ class SessionWorkLeadMaster(BaseModel):
     work_lead_master_name: str
     work_lead_type_id: str
     work_lead_type_name: Optional[str] = None
+    work_lead_type_parent_id: Optional[str] = None
+    work_lead_type_parent_name: Optional[str] = None
     status: str  # TODO, WORKING, DANGER, OK
 
 
@@ -3088,20 +3205,30 @@ async def get_session_work_lead_masters(
 
         # Recuperer les associations depuis la table pivot
         response = supabase_admin.table("session_master_work_lead_master")\
-            .select("work_lead_master_id, status, work_lead_master(id, name, work_lead_type_id, work_lead_type(name))")\
+            .select("work_lead_master_id, status, work_lead_master(id, name, work_lead_type_id, work_lead_type(id, name, parent_id))")\
             .eq("session_master_id", session_id)\
             .execute()
+
+        # Lookup des types pour resoudre les parents
+        types_lookup = _get_work_lead_types_lookup()
 
         result = []
         for item in response.data:
             wlm = item.get("work_lead_master")
             if wlm:
                 work_lead_type = wlm.get("work_lead_type")
+                parent_id = work_lead_type.get("parent_id") if work_lead_type else None
+                parent_name = None
+                if parent_id and types_lookup.get(parent_id):
+                    parent_name = types_lookup[parent_id].get("name")
+
                 result.append(SessionWorkLeadMaster(
                     work_lead_master_id=item["work_lead_master_id"],
                     work_lead_master_name=wlm["name"],
                     work_lead_type_id=wlm["work_lead_type_id"],
                     work_lead_type_name=work_lead_type.get("name") if work_lead_type else None,
+                    work_lead_type_parent_id=parent_id,
+                    work_lead_type_parent_name=parent_name,
                     status=item["status"]
                 ))
 

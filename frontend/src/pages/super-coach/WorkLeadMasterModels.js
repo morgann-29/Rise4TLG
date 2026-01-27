@@ -262,7 +262,7 @@ function WorkLeadMasterModels() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     {item.work_lead_type_name ? (
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200">
-                        {item.work_lead_type_name}
+                        {item.work_lead_type_parent_name ? `${item.work_lead_type_parent_name} - ${item.work_lead_type_name}` : item.work_lead_type_name}
                       </span>
                     ) : (
                       <span className="text-gray-400 dark:text-gray-500">-</span>
@@ -412,7 +412,7 @@ function WorkLeadMasterModels() {
                     <option value="">Selectionnez un type</option>
                     {workLeadTypes.map((type) => (
                       <option key={type.id} value={type.id}>
-                        {type.name}
+                        {type.parent_name ? `${type.parent_name} - ${type.name}` : type.name}
                       </option>
                     ))}
                   </select>

@@ -27,6 +27,8 @@ class WorkLeadMasterResponse(BaseModel):
     group_id: Optional[str] = None
     work_lead_type_id: str
     work_lead_type_name: Optional[str] = None
+    work_lead_type_parent_id: Optional[str] = None
+    work_lead_type_parent_name: Optional[str] = None
     name: str
     content: Optional[str] = None
     current_status: str = "NEW"  # NEW, TODO, WORKING, DANGER, OK - derive de la table pivot
