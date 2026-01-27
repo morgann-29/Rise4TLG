@@ -69,6 +69,13 @@ export const coachService = {
     return response.data
   },
 
+  async getGroupWorkLeadSessions(groupId, workLeadId, offset = 0, limit = 10) {
+    const response = await api.get(`/api/coach/groups/${groupId}/work-leads/${workLeadId}/sessions`, {
+      params: { offset, limit }
+    })
+    return response.data
+  },
+
   async createGroupWorkLead(groupId, data) {
     const response = await api.post(`/api/coach/groups/${groupId}/work-leads`, data)
     return response.data

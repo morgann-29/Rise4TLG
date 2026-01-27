@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Query
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
@@ -79,6 +79,20 @@ class GroupWorkLeadCreate(BaseModel):
     name: str
     work_lead_type_id: str
     content: Optional[str] = None
+
+
+class WorkLeadMasterSessionHistoryItem(BaseModel):
+    session_master_id: str
+    session_master_name: str
+    date_start: Optional[datetime] = None
+    status: str
+
+
+class WorkLeadMasterSessionHistoryResponse(BaseModel):
+    items: List[WorkLeadMasterSessionHistoryItem]
+    total: int
+    offset: int
+    limit: int
 
 
 class GroupProject(BaseModel):
@@ -1117,6 +1131,94 @@ async def get_group_work_lead(
             is_archived=w.get("is_archived", False),
             created_at=w["created_at"],
             updated_at=w["updated_at"]
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.get("/groups/{group_id}/work-leads/{work_lead_id}/sessions", response_model=WorkLeadMasterSessionHistoryResponse)
+async def get_group_work_lead_sessions(
+    group_id: str,
+    work_lead_id: str,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=50),
+    user: CurrentUser = Depends(require_coach)
+):
+    """Recuperer l'historique des sessions pour un axe de travail du groupe"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Verify work_lead_master exists and belongs to group
+        wl_check = supabase_admin.table("work_lead_master")\
+            .select("id")\
+            .eq("id", work_lead_id)\
+            .eq("group_id", group_id)\
+            .execute()
+
+        if not wl_check.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Axe de travail non trouve"
+            )
+
+        # Get all session_master_ids and statuses from pivot table
+        pivot_response = supabase_admin.table("session_master_work_lead_master")\
+            .select("session_master_id, status")\
+            .eq("work_lead_master_id", work_lead_id)\
+            .execute()
+
+        if not pivot_response.data:
+            return WorkLeadMasterSessionHistoryResponse(
+                items=[],
+                total=0,
+                offset=offset,
+                limit=limit
+            )
+
+        session_ids = [p["session_master_id"] for p in pivot_response.data]
+        status_map = {p["session_master_id"]: p["status"] for p in pivot_response.data}
+
+        # Get total count (excluding deleted sessions)
+        count_response = supabase_admin.table("session_master")\
+            .select("id", count="exact")\
+            .in_("id", session_ids)\
+            .eq("is_deleted", False)\
+            .execute()
+        total = count_response.count or 0
+
+        # Get session_masters ordered by date_start DESC with pagination
+        sessions_response = supabase_admin.table("session_master")\
+            .select("id, name, date_start")\
+            .in_("id", session_ids)\
+            .eq("is_deleted", False)\
+            .order("date_start", desc=True, nullsfirst=False)\
+            .range(offset, offset + limit - 1)\
+            .execute()
+
+        items = []
+        for s in sessions_response.data:
+            items.append(WorkLeadMasterSessionHistoryItem(
+                session_master_id=s["id"],
+                session_master_name=s.get("name") or "Sans nom",
+                date_start=s.get("date_start"),
+                status=status_map.get(s["id"], "TODO")
+            ))
+
+        return WorkLeadMasterSessionHistoryResponse(
+            items=items,
+            total=total,
+            offset=offset,
+            limit=limit
         )
 
     except HTTPException:

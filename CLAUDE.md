@@ -199,6 +199,7 @@ cd frontend && npm start
 - `PUT /api/coach/groups/{id}/sessions/{session_id}/work-lead-masters` - Associer/modifier thématique (status null = supprimer)
 - `GET/POST/PUT/DELETE /api/coach/groups/{id}/work-leads` - Axes de travail du groupe
 - `GET /api/coach/groups/{id}/work-leads/{work_lead_id}` - Détail axe
+- `GET /api/coach/groups/{id}/work-leads/{work_lead_id}/sessions` - Historique sessions où l'axe a été utilisé (paginé)
 - `POST /api/coach/groups/{id}/work-leads/{work_lead_id}/archive` - Archiver axe
 - `POST /api/coach/groups/{id}/work-leads/{work_lead_id}/unarchive` - Désarchiver axe
 - `POST /api/coach/groups/{id}/work-leads/{work_lead_id}/restore` - Restaurer axe supprimé
