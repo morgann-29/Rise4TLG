@@ -158,5 +158,55 @@ export const fileService = {
    */
   isVideo(file) {
     return file.file_type === 'video' || file.mime_type?.startsWith('video/')
+  },
+
+  /**
+   * Verifie si un fichier est un PDF
+   */
+  isPdf(file) {
+    return file.mime_type === 'application/pdf' || file.file_name?.toLowerCase().endsWith('.pdf')
+  },
+
+  /**
+   * Verifie si un fichier est visualisable en fullscreen (images et videos)
+   */
+  isViewable(file) {
+    return this.isImage(file) || this.isVideo(file)
+  },
+
+  /**
+   * Telecharge un fichier (force le telechargement meme pour les types geres par le navigateur)
+   */
+  async downloadFile(file) {
+    try {
+      // Fetch le fichier comme blob pour forcer le telechargement
+      const response = await fetch(file.signed_url)
+      const blob = await response.blob()
+
+      // Creer une URL blob locale
+      const blobUrl = window.URL.createObjectURL(blob)
+
+      // Creer un lien et forcer le telechargement
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.download = file.file_name
+      document.body.appendChild(link)
+      link.click()
+
+      // Cleanup
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(blobUrl)
+    } catch (error) {
+      console.error('Erreur telechargement:', error)
+      // Fallback: ouvrir dans un nouvel onglet
+      window.open(file.signed_url, '_blank')
+    }
+  },
+
+  /**
+   * Ouvre un fichier dans un nouvel onglet
+   */
+  openInNewTab(file) {
+    window.open(file.signed_url, '_blank')
   }
 }
