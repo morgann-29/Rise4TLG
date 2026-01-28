@@ -1509,6 +1509,7 @@ class ProjectDetail(BaseModel):
     navigant_email: Optional[str] = None
     sessions_count: int = 0
     work_leads_count: int = 0
+    periods_count: int = 0
 
 
 class ProjectSession(BaseModel):
@@ -1786,6 +1787,13 @@ async def get_project_detail(
             .eq("is_archived", False)\
             .execute()
 
+        # Compter les periods
+        periods_count = supabase_admin.table("period")\
+            .select("id", count="exact")\
+            .eq("project_id", project_id)\
+            .eq("is_deleted", False)\
+            .execute()
+
         type_support = project.get("type_support")
 
         return ProjectDetail(
@@ -1795,7 +1803,8 @@ async def get_project_detail(
             navigant_name=navigant_name,
             navigant_email=navigant_email,
             sessions_count=sessions_count.count or 0,
-            work_leads_count=work_leads_count.count or 0
+            work_leads_count=work_leads_count.count or 0,
+            periods_count=periods_count.count or 0
         )
 
     except HTTPException:
@@ -3649,6 +3658,1164 @@ async def update_session_work_lead_master(
             )
 
             return {"message": "Association mise a jour", "status": data.status}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+# ============================================
+# PERIOD MASTER (periodes de groupe)
+# ============================================
+
+class GroupPeriod(BaseModel):
+    id: str
+    name: str
+    profile_id: str
+    profile_name: Optional[str] = None
+    date_start: datetime
+    date_end: datetime
+    content: Optional[str] = None
+    is_deleted: bool = False
+    created_at: datetime
+    updated_at: datetime
+    project_count: int = 0
+    session_master_count: int = 0
+
+
+class GroupPeriodProject(BaseModel):
+    project_id: str
+    project_name: str
+    navigant_name: Optional[str] = None
+    period_id: Optional[str] = None
+
+
+class GroupPeriodDetail(GroupPeriod):
+    projects: List[GroupPeriodProject] = []
+
+
+class GroupPeriodCreate(BaseModel):
+    name: str
+    date_start: datetime
+    date_end: datetime
+    content: Optional[str] = None
+    project_ids: Optional[List[str]] = None
+
+
+class GroupPeriodUpdate(BaseModel):
+    name: Optional[str] = None
+    date_start: Optional[datetime] = None
+    date_end: Optional[datetime] = None
+    content: Optional[str] = None
+
+
+class PeriodSessionMasterItem(BaseModel):
+    session_master_id: str
+    session_master_name: str
+    date_start: Optional[datetime] = None
+    type_seance_name: Optional[str] = None
+
+
+class PeriodParticipantsUpdate(BaseModel):
+    project_ids: List[str]
+
+
+@router.get("/groups/{group_id}/periods", response_model=List[GroupPeriod])
+async def get_group_periods(
+    group_id: str,
+    include_deleted: bool = False,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Liste des periodes d'un groupe"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        query = supabase_admin.table("period_master")\
+            .select("*")\
+            .eq("group_id", group_id)\
+            .order("date_start", desc=True)
+
+        if not include_deleted:
+            query = query.eq("is_deleted", False)
+
+        response = query.execute()
+
+        result = []
+        for pm in response.data:
+            # Get creator name using existing helper
+            creator_name = _get_coach_name(pm["profile_id"])
+
+            # Count projects linked via period
+            project_count = supabase_admin.table("period")\
+                .select("id", count="exact")\
+                .eq("period_master_id", pm["id"])\
+                .eq("is_deleted", False)\
+                .execute()
+
+            # Count session_masters in date range
+            session_count = supabase_admin.table("session_master")\
+                .select("id", count="exact")\
+                .eq("group_id", group_id)\
+                .eq("is_deleted", False)\
+                .gte("date_start", pm["date_start"])\
+                .lte("date_start", pm["date_end"])\
+                .execute()
+
+            result.append(GroupPeriod(
+                id=pm["id"],
+                name=pm["name"],
+                profile_id=pm["profile_id"],
+                profile_name=creator_name,
+                date_start=pm["date_start"],
+                date_end=pm["date_end"],
+                content=pm.get("content"),
+                is_deleted=pm.get("is_deleted", False),
+                created_at=pm["created_at"],
+                updated_at=pm["updated_at"],
+                project_count=project_count.count or 0,
+                session_master_count=session_count.count or 0
+            ))
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.post("/groups/{group_id}/periods", response_model=GroupPeriodDetail)
+async def create_group_period(
+    group_id: str,
+    data: GroupPeriodCreate,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Creer une periode pour le groupe avec les projets selectionnes"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Create period_master
+        period_master_data = {
+            "name": data.name,
+            "profile_id": user.active_profile_id,
+            "group_id": group_id,
+            "date_start": data.date_start.isoformat(),
+            "date_end": data.date_end.isoformat(),
+            "content": data.content
+        }
+
+        response = supabase_admin.table("period_master")\
+            .insert(period_master_data)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erreur lors de la creation"
+            )
+
+        period_master = response.data[0]
+        period_master_id = period_master["id"]
+
+        # Create periods for selected projects
+        projects_info = []
+        if data.project_ids:
+            for project_id in data.project_ids:
+                # Verify project belongs to group
+                check = supabase_admin.table("group_project")\
+                    .select("project_id")\
+                    .eq("group_id", group_id)\
+                    .eq("project_id", project_id)\
+                    .execute()
+
+                if not check.data:
+                    continue
+
+                # Get project info
+                project = supabase_admin.table("project")\
+                    .select("id, name, profile_id")\
+                    .eq("id", project_id)\
+                    .single()\
+                    .execute()
+
+                if not project.data:
+                    continue
+
+                # Get navigant name using existing helper
+                navigant_name = _get_coach_name(project.data["profile_id"])
+
+                # Create period for this project
+                period_data = {
+                    "name": data.name,
+                    "project_id": project_id,
+                    "period_master_id": period_master_id,
+                    "date_start": data.date_start.isoformat(),
+                    "date_end": data.date_end.isoformat()
+                }
+
+                period_response = supabase_admin.table("period")\
+                    .insert(period_data)\
+                    .execute()
+
+                period_id = period_response.data[0]["id"] if period_response.data else None
+
+                projects_info.append(GroupPeriodProject(
+                    project_id=project_id,
+                    project_name=project.data["name"],
+                    navigant_name=navigant_name,
+                    period_id=period_id
+                ))
+
+        # Get creator name using existing helper
+        creator_name = _get_coach_name(user.active_profile_id)
+
+        return GroupPeriodDetail(
+            id=period_master_id,
+            name=period_master["name"],
+            profile_id=period_master["profile_id"],
+            profile_name=creator_name,
+            date_start=period_master["date_start"],
+            date_end=period_master["date_end"],
+            content=period_master.get("content"),
+            is_deleted=period_master.get("is_deleted", False),
+            created_at=period_master["created_at"],
+            updated_at=period_master["updated_at"],
+            project_count=len(projects_info),
+            session_master_count=0,
+            projects=projects_info
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.get("/groups/{group_id}/periods/{period_id}", response_model=GroupPeriodDetail)
+async def get_group_period(
+    group_id: str,
+    period_id: str,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Detail d'une periode de groupe"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Get period_master
+        response = supabase_admin.table("period_master")\
+            .select("*")\
+            .eq("id", period_id)\
+            .eq("group_id", group_id)\
+            .single()\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Periode non trouvee"
+            )
+
+        pm = response.data
+
+        # Get creator name using existing helper
+        creator_name = _get_coach_name(pm["profile_id"])
+
+        # Get projects with their periods
+        periods = supabase_admin.table("period")\
+            .select("id, project_id")\
+            .eq("period_master_id", period_id)\
+            .eq("is_deleted", False)\
+            .execute()
+
+        projects_info = []
+        for p in periods.data:
+            project = supabase_admin.table("project")\
+                .select("id, name, profile_id")\
+                .eq("id", p["project_id"])\
+                .single()\
+                .execute()
+
+            if project.data:
+                # Get navigant name using existing helper
+                navigant_name = _get_coach_name(project.data["profile_id"])
+
+                projects_info.append(GroupPeriodProject(
+                    project_id=project.data["id"],
+                    project_name=project.data["name"],
+                    navigant_name=navigant_name,
+                    period_id=p["id"]
+                ))
+
+        # Count session_masters in date range
+        session_count = supabase_admin.table("session_master")\
+            .select("id", count="exact")\
+            .eq("group_id", group_id)\
+            .eq("is_deleted", False)\
+            .gte("date_start", pm["date_start"])\
+            .lte("date_start", pm["date_end"])\
+            .execute()
+
+        return GroupPeriodDetail(
+            id=pm["id"],
+            name=pm["name"],
+            profile_id=pm["profile_id"],
+            profile_name=creator_name,
+            date_start=pm["date_start"],
+            date_end=pm["date_end"],
+            content=pm.get("content"),
+            is_deleted=pm.get("is_deleted", False),
+            created_at=pm["created_at"],
+            updated_at=pm["updated_at"],
+            project_count=len(projects_info),
+            session_master_count=session_count.count or 0,
+            projects=projects_info
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.put("/groups/{group_id}/periods/{period_id}", response_model=GroupPeriodDetail)
+async def update_group_period(
+    group_id: str,
+    period_id: str,
+    data: GroupPeriodUpdate,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Mettre a jour une periode de groupe (propage dates/nom vers periods liees)"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Build update data
+        update_data = {}
+        if data.name is not None:
+            update_data["name"] = data.name
+        if data.date_start is not None:
+            update_data["date_start"] = data.date_start.isoformat()
+        if data.date_end is not None:
+            update_data["date_end"] = data.date_end.isoformat()
+        if data.content is not None:
+            update_data["content"] = data.content
+
+        if not update_data:
+            return await get_group_period(group_id, period_id, user)
+
+        # Update period_master
+        response = supabase_admin.table("period_master")\
+            .update(update_data)\
+            .eq("id", period_id)\
+            .eq("group_id", group_id)\
+            .eq("is_deleted", False)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Periode non trouvee"
+            )
+
+        # Propagate name and dates to linked periods
+        propagate_data = {}
+        if data.name is not None:
+            propagate_data["name"] = data.name
+        if data.date_start is not None:
+            propagate_data["date_start"] = data.date_start.isoformat()
+        if data.date_end is not None:
+            propagate_data["date_end"] = data.date_end.isoformat()
+
+        if propagate_data:
+            supabase_admin.table("period")\
+                .update(propagate_data)\
+                .eq("period_master_id", period_id)\
+                .eq("is_deleted", False)\
+                .execute()
+
+        return await get_group_period(group_id, period_id, user)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.delete("/groups/{group_id}/periods/{period_id}")
+async def delete_group_period(
+    group_id: str,
+    period_id: str,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Soft delete d'une periode de groupe"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Soft delete period_master
+        response = supabase_admin.table("period_master")\
+            .update({"is_deleted": True})\
+            .eq("id", period_id)\
+            .eq("group_id", group_id)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Periode non trouvee"
+            )
+
+        # Also soft delete linked periods
+        supabase_admin.table("period")\
+            .update({"is_deleted": True})\
+            .eq("period_master_id", period_id)\
+            .execute()
+
+        return {"message": "Periode supprimee"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.post("/groups/{group_id}/periods/{period_id}/restore")
+async def restore_group_period(
+    group_id: str,
+    period_id: str,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Restaurer une periode de groupe supprimee"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        response = supabase_admin.table("period_master")\
+            .update({"is_deleted": False})\
+            .eq("id", period_id)\
+            .eq("group_id", group_id)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Periode non trouvee"
+            )
+
+        # Also restore linked periods
+        supabase_admin.table("period")\
+            .update({"is_deleted": False})\
+            .eq("period_master_id", period_id)\
+            .execute()
+
+        return {"message": "Periode restauree"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.get("/groups/{group_id}/periods/{period_id}/session-masters", response_model=List[PeriodSessionMasterItem])
+async def get_period_session_masters(
+    group_id: str,
+    period_id: str,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Liste des session_masters dans la periode (par date)"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Get period dates
+        period = supabase_admin.table("period_master")\
+            .select("date_start, date_end")\
+            .eq("id", period_id)\
+            .eq("group_id", group_id)\
+            .eq("is_deleted", False)\
+            .single()\
+            .execute()
+
+        if not period.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Periode non trouvee"
+            )
+
+        # Get session_masters in date range
+        sessions = supabase_admin.table("session_master")\
+            .select("id, name, date_start, type_seance_id")\
+            .eq("group_id", group_id)\
+            .eq("is_deleted", False)\
+            .gte("date_start", period.data["date_start"])\
+            .lte("date_start", period.data["date_end"])\
+            .order("date_start", desc=True)\
+            .execute()
+
+        result = []
+        for s in sessions.data:
+            type_seance_name = None
+            if s.get("type_seance_id"):
+                ts = supabase_admin.table("type_seance")\
+                    .select("name")\
+                    .eq("id", s["type_seance_id"])\
+                    .single()\
+                    .execute()
+                if ts.data:
+                    type_seance_name = ts.data["name"]
+
+            result.append(PeriodSessionMasterItem(
+                session_master_id=s["id"],
+                session_master_name=s["name"],
+                date_start=s.get("date_start"),
+                type_seance_name=type_seance_name
+            ))
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.put("/groups/{group_id}/periods/{period_id}/participants", response_model=GroupPeriodDetail)
+async def update_period_participants(
+    group_id: str,
+    period_id: str,
+    data: PeriodParticipantsUpdate,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Mettre a jour les participants (projets) d'une periode"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        # Get period_master
+        pm = supabase_admin.table("period_master")\
+            .select("*")\
+            .eq("id", period_id)\
+            .eq("group_id", group_id)\
+            .eq("is_deleted", False)\
+            .single()\
+            .execute()
+
+        if not pm.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Periode non trouvee"
+            )
+
+        # Get current periods
+        current_periods = supabase_admin.table("period")\
+            .select("id, project_id")\
+            .eq("period_master_id", period_id)\
+            .eq("is_deleted", False)\
+            .execute()
+
+        current_project_ids = {p["project_id"] for p in current_periods.data}
+        new_project_ids = set(data.project_ids)
+
+        # Projects to add
+        to_add = new_project_ids - current_project_ids
+        # Projects to remove
+        to_remove = current_project_ids - new_project_ids
+
+        # Add new periods
+        for project_id in to_add:
+            # Verify project belongs to group
+            check = supabase_admin.table("group_project")\
+                .select("project_id")\
+                .eq("group_id", group_id)\
+                .eq("project_id", project_id)\
+                .execute()
+
+            if not check.data:
+                continue
+
+            period_data = {
+                "name": pm.data["name"],
+                "project_id": project_id,
+                "period_master_id": period_id,
+                "date_start": pm.data["date_start"],
+                "date_end": pm.data["date_end"]
+            }
+
+            supabase_admin.table("period")\
+                .insert(period_data)\
+                .execute()
+
+        # Soft delete removed periods
+        for project_id in to_remove:
+            supabase_admin.table("period")\
+                .update({"is_deleted": True})\
+                .eq("period_master_id", period_id)\
+                .eq("project_id", project_id)\
+                .execute()
+
+        return await get_group_period(group_id, period_id, user)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+# ============================================
+# PROJECT PERIODS (periodes de projet - coach)
+# ============================================
+
+class ProjectPeriod(BaseModel):
+    id: str
+    name: str
+    project_id: str
+    period_master_id: Optional[str] = None
+    date_start: datetime
+    date_end: datetime
+    content: Optional[str] = None
+    is_deleted: bool = False
+    created_at: datetime
+    updated_at: datetime
+    session_count: int = 0
+
+
+class ProjectPeriodMasterInfo(BaseModel):
+    id: str
+    name: str
+    content: Optional[str] = None
+    profile_id: str
+    profile_name: Optional[str] = None
+
+
+class ProjectPeriodDetail(ProjectPeriod):
+    period_master: Optional[ProjectPeriodMasterInfo] = None
+    project_name: Optional[str] = None
+
+
+class ProjectPeriodCreate(BaseModel):
+    name: str
+    date_start: datetime
+    date_end: datetime
+    content: Optional[str] = None
+
+
+class ProjectPeriodUpdate(BaseModel):
+    name: Optional[str] = None
+    date_start: Optional[datetime] = None
+    date_end: Optional[datetime] = None
+    content: Optional[str] = None
+
+
+class PeriodSessionItem(BaseModel):
+    session_id: str
+    session_name: str
+    date_start: Optional[datetime] = None
+    type_seance_name: Optional[str] = None
+
+
+@router.get("/groups/{group_id}/projects/{project_id}/periods", response_model=List[ProjectPeriod])
+async def get_project_periods(
+    group_id: str,
+    project_id: str,
+    include_deleted: bool = False,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Liste des periodes d'un projet"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        query = supabase_admin.table("period")\
+            .select("*")\
+            .eq("project_id", project_id)\
+            .order("date_start", desc=True)
+
+        if not include_deleted:
+            query = query.eq("is_deleted", False)
+
+        response = query.execute()
+
+        result = []
+        for p in response.data:
+            # Count sessions in date range
+            session_count = supabase_admin.table("session")\
+                .select("id", count="exact")\
+                .eq("project_id", project_id)\
+                .eq("is_deleted", False)\
+                .gte("date_start", p["date_start"])\
+                .lte("date_start", p["date_end"])\
+                .execute()
+
+            result.append(ProjectPeriod(
+                id=p["id"],
+                name=p["name"],
+                project_id=p["project_id"],
+                period_master_id=p.get("period_master_id"),
+                date_start=p["date_start"],
+                date_end=p["date_end"],
+                content=p.get("content"),
+                is_deleted=p.get("is_deleted", False),
+                created_at=p["created_at"],
+                updated_at=p["updated_at"],
+                session_count=session_count.count or 0
+            ))
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.post("/groups/{group_id}/projects/{project_id}/periods", response_model=ProjectPeriodDetail)
+async def create_project_period(
+    group_id: str,
+    project_id: str,
+    data: ProjectPeriodCreate,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Creer une periode pour un projet (sans master)"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        period_data = {
+            "name": data.name,
+            "project_id": project_id,
+            "date_start": data.date_start.isoformat(),
+            "date_end": data.date_end.isoformat(),
+            "content": data.content
+        }
+
+        response = supabase_admin.table("period")\
+            .insert(period_data)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erreur lors de la creation"
+            )
+
+        return await get_project_period(group_id, project_id, response.data[0]["id"], user)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.get("/groups/{group_id}/projects/{project_id}/periods/{period_id}", response_model=ProjectPeriodDetail)
+async def get_project_period(
+    group_id: str,
+    project_id: str,
+    period_id: str,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Detail d'une periode de projet"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        response = supabase_admin.table("period")\
+            .select("*")\
+            .eq("id", period_id)\
+            .eq("project_id", project_id)\
+            .single()\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Periode non trouvee"
+            )
+
+        p = response.data
+
+        # Get project name
+        project = supabase_admin.table("project")\
+            .select("name")\
+            .eq("id", project_id)\
+            .single()\
+            .execute()
+        project_name = project.data["name"] if project.data else None
+
+        # Get period_master info if exists
+        period_master_info = None
+        if p.get("period_master_id"):
+            pm = supabase_admin.table("period_master")\
+                .select("id, name, content, profile_id")\
+                .eq("id", p["period_master_id"])\
+                .single()\
+                .execute()
+
+            if pm.data:
+                # Get profile name using existing helper
+                profile_name = _get_coach_name(pm.data["profile_id"])
+
+                period_master_info = ProjectPeriodMasterInfo(
+                    id=pm.data["id"],
+                    name=pm.data["name"],
+                    content=pm.data.get("content"),
+                    profile_id=pm.data["profile_id"],
+                    profile_name=profile_name
+                )
+
+        # Count sessions in date range
+        session_count = supabase_admin.table("session")\
+            .select("id", count="exact")\
+            .eq("project_id", project_id)\
+            .eq("is_deleted", False)\
+            .gte("date_start", p["date_start"])\
+            .lte("date_start", p["date_end"])\
+            .execute()
+
+        return ProjectPeriodDetail(
+            id=p["id"],
+            name=p["name"],
+            project_id=p["project_id"],
+            project_name=project_name,
+            period_master_id=p.get("period_master_id"),
+            period_master=period_master_info,
+            date_start=p["date_start"],
+            date_end=p["date_end"],
+            content=p.get("content"),
+            is_deleted=p.get("is_deleted", False),
+            created_at=p["created_at"],
+            updated_at=p["updated_at"],
+            session_count=session_count.count or 0
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.put("/groups/{group_id}/projects/{project_id}/periods/{period_id}", response_model=ProjectPeriodDetail)
+async def update_project_period(
+    group_id: str,
+    project_id: str,
+    period_id: str,
+    data: ProjectPeriodUpdate,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Mettre a jour une periode de projet"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        # Check if period has master
+        period = supabase_admin.table("period")\
+            .select("period_master_id")\
+            .eq("id", period_id)\
+            .eq("project_id", project_id)\
+            .single()\
+            .execute()
+
+        if not period.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Periode non trouvee"
+            )
+
+        # If has master, restrict name/date updates
+        has_master = period.data.get("period_master_id") is not None
+
+        update_data = {}
+        if data.content is not None:
+            update_data["content"] = data.content
+
+        if not has_master:
+            if data.name is not None:
+                update_data["name"] = data.name
+            if data.date_start is not None:
+                update_data["date_start"] = data.date_start.isoformat()
+            if data.date_end is not None:
+                update_data["date_end"] = data.date_end.isoformat()
+        else:
+            # Reject name/date updates for periods with master
+            if data.name is not None or data.date_start is not None or data.date_end is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Impossible de modifier le nom ou les dates d'une periode liee a un master"
+                )
+
+        if not update_data:
+            return await get_project_period(group_id, project_id, period_id, user)
+
+        supabase_admin.table("period")\
+            .update(update_data)\
+            .eq("id", period_id)\
+            .eq("project_id", project_id)\
+            .execute()
+
+        return await get_project_period(group_id, project_id, period_id, user)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.delete("/groups/{group_id}/projects/{project_id}/periods/{period_id}")
+async def delete_project_period(
+    group_id: str,
+    project_id: str,
+    period_id: str,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Soft delete d'une periode de projet"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        response = supabase_admin.table("period")\
+            .update({"is_deleted": True})\
+            .eq("id", period_id)\
+            .eq("project_id", project_id)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Periode non trouvee"
+            )
+
+        return {"message": "Periode supprimee"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.post("/groups/{group_id}/projects/{project_id}/periods/{period_id}/restore")
+async def restore_project_period(
+    group_id: str,
+    project_id: str,
+    period_id: str,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Restaurer une periode de projet supprimee"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        response = supabase_admin.table("period")\
+            .update({"is_deleted": False})\
+            .eq("id", period_id)\
+            .eq("project_id", project_id)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Periode non trouvee"
+            )
+
+        return {"message": "Periode restauree"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.get("/groups/{group_id}/projects/{project_id}/periods/{period_id}/sessions", response_model=List[PeriodSessionItem])
+async def get_project_period_sessions(
+    group_id: str,
+    project_id: str,
+    period_id: str,
+    user: CurrentUser = Depends(require_coach)
+):
+    """Liste des sessions dans la periode (par date)"""
+    try:
+        if not await _verify_coach_in_group(user.active_profile_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce groupe"
+            )
+
+        if not await _verify_project_in_group(project_id, group_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Projet non trouve dans ce groupe"
+            )
+
+        # Get period dates
+        period = supabase_admin.table("period")\
+            .select("date_start, date_end")\
+            .eq("id", period_id)\
+            .eq("project_id", project_id)\
+            .eq("is_deleted", False)\
+            .single()\
+            .execute()
+
+        if not period.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Periode non trouvee"
+            )
+
+        # Get sessions in date range
+        sessions = supabase_admin.table("session")\
+            .select("id, name, date_start, type_seance_id")\
+            .eq("project_id", project_id)\
+            .eq("is_deleted", False)\
+            .gte("date_start", period.data["date_start"])\
+            .lte("date_start", period.data["date_end"])\
+            .order("date_start", desc=True)\
+            .execute()
+
+        result = []
+        for s in sessions.data:
+            type_seance_name = None
+            if s.get("type_seance_id"):
+                ts = supabase_admin.table("type_seance")\
+                    .select("name")\
+                    .eq("id", s["type_seance_id"])\
+                    .single()\
+                    .execute()
+                if ts.data:
+                    type_seance_name = ts.data["name"]
+
+            result.append(PeriodSessionItem(
+                session_id=s["id"],
+                session_name=s["name"],
+                date_start=s.get("date_start"),
+                type_seance_name=type_seance_name
+            ))
+
+        return result
 
     except HTTPException:
         raise

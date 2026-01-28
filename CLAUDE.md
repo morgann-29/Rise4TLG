@@ -25,6 +25,7 @@ backend/
       work_lead_type.py # Types d'axes de travail
       work_lead_master.py # Modèles d'axes de travail
       session_master.py # Modèles de séances
+      period.py      # Périodes (period_master et period)
     routers/         # Endpoints API
       file.py        # Upload, partage, suppression fichiers
       group.py       # CRUD groupes + gestion coachs/projets
@@ -64,11 +65,12 @@ frontend/
         GroupSessions.js, GroupSessionDetail.js
         GroupWorkLeads.js, GroupWorkLeadDetail.js
         GroupProjects.js, GroupProjectDetail.js
+        GroupPeriods.js, GroupPeriodDetail.js
       navigant/            # Pages Navigant
         NavigantDashboard.js
       shared/              # Pages multi-rôles (layout-agnostic)
-        SessionDetail.js, WorkLeadDetail.js
-        ProjectSessions.js, ProjectWorkLeads.js  # CRUD complet pour Coach et Navigant
+        SessionDetail.js, WorkLeadDetail.js, PeriodDetail.js
+        ProjectSessions.js, ProjectWorkLeads.js, ProjectPeriods.js  # CRUD complet pour Coach et Navigant
     services/
       api.js              # Config Axios
       adminService.js     # API admin
@@ -109,6 +111,11 @@ session_work_lead                           work_lead_master (modèles/templates
     |
     v
 work_lead
+
+period -----> period_master (périodes de groupe)
+    |              |
+    v              v
+project         group
 
 files (polymorphic: entity_type + entity_id)
     |
@@ -216,6 +223,13 @@ cd frontend && npm start
 - `POST /api/coach/groups/{id}/projects/{project_id}/work-leads/{work_lead_id}/unarchive` - Désarchiver axe projet
 - `POST /api/coach/groups/{id}/projects/{project_id}/work-leads/{work_lead_id}/restore` - Restaurer axe projet supprimé
 - `POST /api/coach/groups/{id}/work-leads/import` - Importer un modèle d'axe dans le groupe
+- `GET/POST/PUT/DELETE /api/coach/groups/{id}/periods` - Périodes du groupe (period_master)
+- `GET /api/coach/groups/{id}/periods/{period_id}` - Détail période groupe
+- `PUT /api/coach/groups/{id}/periods/{period_id}/participants` - Modifier projets participants
+- `GET /api/coach/groups/{id}/periods/{period_id}/session-masters` - Sessions dans la période
+- `GET/POST/PUT/DELETE /api/coach/groups/{id}/projects/{project_id}/periods` - Périodes du projet
+- `GET /api/coach/groups/{id}/projects/{project_id}/periods/{period_id}` - Détail période projet
+- `GET /api/coach/groups/{id}/projects/{project_id}/periods/{period_id}/sessions` - Sessions dans la période
 - `GET /api/coach/type-seances` - Types de séances pour dropdown
 - `GET /api/coach/work-lead-types` - Types d'axes pour dropdown
 - `GET /api/coach/work-lead-models` - Modèles d'axes disponibles pour import
@@ -239,6 +253,10 @@ cd frontend && npm start
 - `POST /api/navigant/projects/{project_id}/work-leads/{work_lead_id}/archive` - Archiver axe
 - `POST /api/navigant/projects/{project_id}/work-leads/{work_lead_id}/unarchive` - Désarchiver axe
 - `POST /api/navigant/projects/{project_id}/work-leads/{work_lead_id}/restore` - Restaurer axe supprimé
+- `GET/POST/PUT/DELETE /api/navigant/projects/{project_id}/periods` - Périodes du projet
+- `GET /api/navigant/projects/{project_id}/periods/{period_id}` - Détail période
+- `GET /api/navigant/projects/{project_id}/periods/{period_id}/sessions` - Sessions dans la période
+- `POST /api/navigant/projects/{project_id}/periods/{period_id}/restore` - Restaurer période supprimée
 - `GET /api/navigant/type-seances` - Types de séances pour dropdown
 - `GET /api/navigant/work-lead-types` - Types d'axes pour dropdown
 
@@ -254,7 +272,7 @@ cd frontend && npm start
 ## Système de fichiers
 
 **Types de fichiers** (EntityType):
-- project, group, session, session_master, work_lead, work_lead_master, profile
+- project, group, session, session_master, work_lead, work_lead_master, profile, period, period_master
 
 **Types de contenu** (FileType):
 - image, document, video, audio, gps_track, weather_data, other
@@ -327,11 +345,17 @@ cd frontend && npm start
 /coach/groups/:groupId/projects/:projectId/sessions/:sessionId
 /coach/groups/:groupId/projects/:projectId/work-leads
 /coach/groups/:groupId/projects/:projectId/work-leads/:workLeadId
+/coach/groups/:groupId/projects/:projectId/periods
+/coach/groups/:groupId/projects/:projectId/periods/:periodId
+/coach/groups/:groupId/periods
+/coach/groups/:groupId/periods/:periodId
 /navigant
 /navigant/projects/:projectId/sessions
 /navigant/projects/:projectId/sessions/:sessionId
 /navigant/projects/:projectId/work-leads
 /navigant/projects/:projectId/work-leads/:workLeadId
+/navigant/projects/:projectId/periods
+/navigant/projects/:projectId/periods/:periodId
 ```
 
 ## Notes techniques
@@ -371,3 +395,20 @@ Quand un Coach associe un work_lead_master a une session_master:
 Quand un Coach retire un work_lead_master d'une session_master:
 1. Supprime les `session_work_lead` ou `override_master = FALSE`
 2. Supprime l'entree `session_master_work_lead_master`
+
+## Flux création de période (Coach)
+
+Quand un Coach crée une période pour un groupe:
+1. Création `period_master` (période groupe) avec name, date_start, date_end
+2. Pour chaque projet sélectionné:
+   - Création `period` (période individuelle liée au projet)
+   - Copie name, date_start, date_end depuis period_master
+
+**Association sessions-périodes:**
+- Les sessions sont associées aux périodes par date: `session.date_start BETWEEN period.date_start AND period.date_end`
+- Pas de table pivot, l'association est calculée dynamiquement
+
+**Restrictions:**
+- Les périodes liées à un period_master ne peuvent pas modifier name/date_start/date_end
+- Le contenu (content) et les fichiers sont indépendants entre period_master et period
+- Pas d'archivage pour les périodes (juste soft delete)

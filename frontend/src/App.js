@@ -37,6 +37,11 @@ import GroupProjectDetail from './pages/coach/GroupProjectDetail'
 // Shared pages for project-level data
 import ProjectSessions from './pages/shared/ProjectSessions'
 import ProjectWorkLeads from './pages/shared/ProjectWorkLeads'
+import ProjectPeriods from './pages/shared/ProjectPeriods'
+import PeriodDetail from './pages/shared/PeriodDetail'
+// Coach period pages
+import GroupPeriods from './pages/coach/GroupPeriods'
+import GroupPeriodDetail from './pages/coach/GroupPeriodDetail'
 
 // Helper pour obtenir la route par defaut selon le profil
 function getDefaultRoute(isAdmin, isSuperCoach, isCoach) {
@@ -319,6 +324,24 @@ function App() {
           />
 
           <Route
+            path="/coach/groups/:groupId/periods"
+            element={
+              <CoachRoute>
+                <GroupPeriods />
+              </CoachRoute>
+            }
+          />
+
+          <Route
+            path="/coach/groups/:groupId/periods/:periodId"
+            element={
+              <CoachRoute>
+                <GroupPeriodDetail />
+              </CoachRoute>
+            }
+          />
+
+          <Route
             path="/coach/groups/:groupId/projects"
             element={
               <CoachRoute>
@@ -372,6 +395,24 @@ function App() {
             }
           />
 
+          <Route
+            path="/coach/groups/:groupId/projects/:projectId/periods"
+            element={
+              <CoachRoute>
+                <ProjectPeriods />
+              </CoachRoute>
+            }
+          />
+
+          <Route
+            path="/coach/groups/:groupId/projects/:projectId/periods/:periodId"
+            element={
+              <CoachRoute>
+                <PeriodDetail />
+              </CoachRoute>
+            }
+          />
+
           {/* Routes Operateur (Navigant) */}
           <Route
             path="/dashboard"
@@ -414,6 +455,24 @@ function App() {
             element={
               <OperatorRoute>
                 <WorkLeadDetail />
+              </OperatorRoute>
+            }
+          />
+
+          <Route
+            path="/navigant/projects/:projectId/periods"
+            element={
+              <OperatorRoute>
+                <ProjectPeriods />
+              </OperatorRoute>
+            }
+          />
+
+          <Route
+            path="/navigant/projects/:projectId/periods/:periodId"
+            element={
+              <OperatorRoute>
+                <PeriodDetail />
               </OperatorRoute>
             }
           />

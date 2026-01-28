@@ -116,6 +116,45 @@ export const navigantService = {
   },
 
   // ============================================
+  // PERIODS
+  // ============================================
+
+  async getPeriods(projectId, includeDeleted = false) {
+    const response = await api.get(`/api/navigant/projects/${projectId}/periods`, {
+      params: { include_deleted: includeDeleted }
+    })
+    return response.data
+  },
+
+  async getPeriod(projectId, periodId) {
+    const response = await api.get(`/api/navigant/projects/${projectId}/periods/${periodId}`)
+    return response.data
+  },
+
+  async getPeriodSessions(projectId, periodId) {
+    const response = await api.get(`/api/navigant/projects/${projectId}/periods/${periodId}/sessions`)
+    return response.data
+  },
+
+  async createPeriod(projectId, data) {
+    const response = await api.post(`/api/navigant/projects/${projectId}/periods`, data)
+    return response.data
+  },
+
+  async updatePeriod(projectId, periodId, data) {
+    const response = await api.put(`/api/navigant/projects/${projectId}/periods/${periodId}`, data)
+    return response.data
+  },
+
+  async deletePeriod(projectId, periodId) {
+    await api.delete(`/api/navigant/projects/${projectId}/periods/${periodId}`)
+  },
+
+  async restorePeriod(projectId, periodId) {
+    await api.post(`/api/navigant/projects/${projectId}/periods/${periodId}/restore`)
+  },
+
+  // ============================================
   // DROPDOWNS
   // ============================================
 

@@ -66,8 +66,8 @@ function GroupProjectDetail() {
           </div>
         )}
 
-        {/* Top row - 3 blocks */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Top row - 4 blocks */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Left block - Project info + preparation score */}
           <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
             <div className="flex items-center mb-4">
@@ -130,7 +130,7 @@ function GroupProjectDetail() {
             </p>
           </div>
 
-          {/* Right block - Work Leads */}
+          {/* Work Leads block */}
           <div
             onClick={() => navigate(`/coach/groups/${groupId}/projects/${projectId}/work-leads`)}
             className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 cursor-pointer hover:shadow-lg transition-shadow group"
@@ -158,6 +158,37 @@ function GroupProjectDetail() {
             </div>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
               Voir tous les axes du projet
+            </p>
+          </div>
+
+          {/* Periods block */}
+          <div
+            onClick={() => navigate(`/coach/groups/${groupId}/projects/${projectId}/periods`)}
+            className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 cursor-pointer hover:shadow-lg transition-shadow group"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex-shrink-0 h-12 w-12 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center">
+                <svg className="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <svg className="w-5 h-5 text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+              Periodes
+            </h3>
+            <div className="mt-2">
+              <span className="text-3xl font-bold text-purple-600 dark:text-purple-400">
+                {project?.periods_count || 0}
+              </span>
+              <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">
+                periode{(project?.periods_count || 0) > 1 ? 's' : ''}
+              </span>
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+              Voir toutes les periodes du projet
             </p>
           </div>
         </div>

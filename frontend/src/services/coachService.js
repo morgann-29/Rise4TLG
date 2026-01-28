@@ -284,5 +284,90 @@ export const coachService = {
       status: status // null = supprimer, sinon TODO/WORKING/DANGER/OK
     })
     return response.data
+  },
+
+  // ============================================
+  // PERIODS (period_master du groupe)
+  // ============================================
+
+  async getGroupPeriods(groupId, includeDeleted = false) {
+    const response = await api.get(`/api/coach/groups/${groupId}/periods`, {
+      params: { include_deleted: includeDeleted }
+    })
+    return response.data
+  },
+
+  async getGroupPeriod(groupId, periodId) {
+    const response = await api.get(`/api/coach/groups/${groupId}/periods/${periodId}`)
+    return response.data
+  },
+
+  async createGroupPeriod(groupId, data) {
+    const response = await api.post(`/api/coach/groups/${groupId}/periods`, data)
+    return response.data
+  },
+
+  async updateGroupPeriod(groupId, periodId, data) {
+    const response = await api.put(`/api/coach/groups/${groupId}/periods/${periodId}`, data)
+    return response.data
+  },
+
+  async deleteGroupPeriod(groupId, periodId) {
+    await api.delete(`/api/coach/groups/${groupId}/periods/${periodId}`)
+  },
+
+  async restoreGroupPeriod(groupId, periodId) {
+    await api.post(`/api/coach/groups/${groupId}/periods/${periodId}/restore`)
+  },
+
+  async getGroupPeriodSessionMasters(groupId, periodId) {
+    const response = await api.get(`/api/coach/groups/${groupId}/periods/${periodId}/session-masters`)
+    return response.data
+  },
+
+  async updatePeriodParticipants(groupId, periodId, projectIds) {
+    const response = await api.put(`/api/coach/groups/${groupId}/periods/${periodId}/participants`, {
+      project_ids: projectIds
+    })
+    return response.data
+  },
+
+  // ============================================
+  // PROJECT PERIODS (period du projet)
+  // ============================================
+
+  async getProjectPeriods(groupId, projectId, includeDeleted = false) {
+    const response = await api.get(`/api/coach/groups/${groupId}/projects/${projectId}/periods`, {
+      params: { include_deleted: includeDeleted }
+    })
+    return response.data
+  },
+
+  async getProjectPeriod(groupId, projectId, periodId) {
+    const response = await api.get(`/api/coach/groups/${groupId}/projects/${projectId}/periods/${periodId}`)
+    return response.data
+  },
+
+  async createProjectPeriod(groupId, projectId, data) {
+    const response = await api.post(`/api/coach/groups/${groupId}/projects/${projectId}/periods`, data)
+    return response.data
+  },
+
+  async updateProjectPeriod(groupId, projectId, periodId, data) {
+    const response = await api.put(`/api/coach/groups/${groupId}/projects/${projectId}/periods/${periodId}`, data)
+    return response.data
+  },
+
+  async deleteProjectPeriod(groupId, projectId, periodId) {
+    await api.delete(`/api/coach/groups/${groupId}/projects/${projectId}/periods/${periodId}`)
+  },
+
+  async restoreProjectPeriod(groupId, projectId, periodId) {
+    await api.post(`/api/coach/groups/${groupId}/projects/${projectId}/periods/${periodId}/restore`)
+  },
+
+  async getProjectPeriodSessions(groupId, projectId, periodId) {
+    const response = await api.get(`/api/coach/groups/${groupId}/projects/${projectId}/periods/${periodId}/sessions`)
+    return response.data
   }
 }

@@ -2477,6 +2477,479 @@ async def restore_project_work_lead(
 
 
 # ============================================
+# PERIODS (periodes du projet)
+# ============================================
+
+class NavigantPeriod(BaseModel):
+    id: str
+    name: str
+    project_id: str
+    period_master_id: Optional[str] = None
+    date_start: datetime
+    date_end: datetime
+    content: Optional[str] = None
+    is_deleted: bool = False
+    created_at: datetime
+    updated_at: datetime
+    session_count: int = 0
+
+
+class NavigantPeriodMasterInfo(BaseModel):
+    id: str
+    name: str
+    content: Optional[str] = None
+    profile_id: str
+    profile_name: Optional[str] = None
+
+
+class NavigantPeriodDetail(NavigantPeriod):
+    period_master: Optional[NavigantPeriodMasterInfo] = None
+    project_name: Optional[str] = None
+
+
+class NavigantPeriodCreate(BaseModel):
+    name: str
+    date_start: datetime
+    date_end: datetime
+    content: Optional[str] = None
+
+
+class NavigantPeriodUpdate(BaseModel):
+    name: Optional[str] = None
+    date_start: Optional[datetime] = None
+    date_end: Optional[datetime] = None
+    content: Optional[str] = None
+
+
+class NavigantPeriodSessionItem(BaseModel):
+    session_id: str
+    session_name: str
+    date_start: Optional[datetime] = None
+    type_seance_name: Optional[str] = None
+
+
+@router.get("/projects/{project_id}/periods", response_model=List[NavigantPeriod])
+async def get_periods(
+    project_id: str,
+    include_deleted: bool = False,
+    user: CurrentUser = Depends(require_navigant)
+):
+    """Liste des periodes du projet"""
+    try:
+        if not await _verify_navigant_owns_project(user.active_profile_id, project_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce projet"
+            )
+
+        query = supabase_admin.table("period")\
+            .select("*")\
+            .eq("project_id", project_id)\
+            .order("date_start", desc=True)
+
+        if not include_deleted:
+            query = query.eq("is_deleted", False)
+
+        response = query.execute()
+
+        result = []
+        for p in response.data:
+            # Count sessions in date range
+            session_count = supabase_admin.table("session")\
+                .select("id", count="exact")\
+                .eq("project_id", project_id)\
+                .eq("is_deleted", False)\
+                .gte("date_start", p["date_start"])\
+                .lte("date_start", p["date_end"])\
+                .execute()
+
+            result.append(NavigantPeriod(
+                id=p["id"],
+                name=p["name"],
+                project_id=p["project_id"],
+                period_master_id=p.get("period_master_id"),
+                date_start=p["date_start"],
+                date_end=p["date_end"],
+                content=p.get("content"),
+                is_deleted=p.get("is_deleted", False),
+                created_at=p["created_at"],
+                updated_at=p["updated_at"],
+                session_count=session_count.count or 0
+            ))
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.post("/projects/{project_id}/periods", response_model=NavigantPeriodDetail)
+async def create_period(
+    project_id: str,
+    data: NavigantPeriodCreate,
+    user: CurrentUser = Depends(require_navigant)
+):
+    """Creer une periode (sans master)"""
+    try:
+        if not await _verify_navigant_owns_project(user.active_profile_id, project_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce projet"
+            )
+
+        period_data = {
+            "name": data.name,
+            "project_id": project_id,
+            "date_start": data.date_start.isoformat(),
+            "date_end": data.date_end.isoformat(),
+            "content": data.content
+        }
+
+        response = supabase_admin.table("period")\
+            .insert(period_data)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erreur lors de la creation"
+            )
+
+        return await get_period_detail(project_id, response.data[0]["id"], user)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.get("/projects/{project_id}/periods/{period_id}", response_model=NavigantPeriodDetail)
+async def get_period_detail(
+    project_id: str,
+    period_id: str,
+    user: CurrentUser = Depends(require_navigant)
+):
+    """Detail d'une periode"""
+    try:
+        if not await _verify_navigant_owns_project(user.active_profile_id, project_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce projet"
+            )
+
+        response = supabase_admin.table("period")\
+            .select("*")\
+            .eq("id", period_id)\
+            .eq("project_id", project_id)\
+            .single()\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Periode non trouvee"
+            )
+
+        p = response.data
+
+        # Get project name
+        project = supabase_admin.table("project")\
+            .select("name")\
+            .eq("id", project_id)\
+            .single()\
+            .execute()
+        project_name = project.data["name"] if project.data else None
+
+        # Get period_master info if exists
+        period_master_info = None
+        if p.get("period_master_id"):
+            pm = supabase_admin.table("period_master")\
+                .select("id, name, content, profile_id")\
+                .eq("id", p["period_master_id"])\
+                .single()\
+                .execute()
+
+            if pm.data:
+                # Get profile name using existing helper
+                profile_name = None
+                profile = supabase_admin.table("profile")\
+                    .select("user_uid")\
+                    .eq("id", pm.data["profile_id"])\
+                    .single()\
+                    .execute()
+                if profile.data:
+                    user_info = _get_user_info(profile.data["user_uid"])
+                    if user_info.get("first_name") or user_info.get("last_name"):
+                        profile_name = f"{user_info.get('first_name', '')} {user_info.get('last_name', '')}".strip()
+                    else:
+                        profile_name = user_info.get("email")
+
+                period_master_info = NavigantPeriodMasterInfo(
+                    id=pm.data["id"],
+                    name=pm.data["name"],
+                    content=pm.data.get("content"),
+                    profile_id=pm.data["profile_id"],
+                    profile_name=profile_name
+                )
+
+        # Count sessions in date range
+        session_count = supabase_admin.table("session")\
+            .select("id", count="exact")\
+            .eq("project_id", project_id)\
+            .eq("is_deleted", False)\
+            .gte("date_start", p["date_start"])\
+            .lte("date_start", p["date_end"])\
+            .execute()
+
+        return NavigantPeriodDetail(
+            id=p["id"],
+            name=p["name"],
+            project_id=p["project_id"],
+            project_name=project_name,
+            period_master_id=p.get("period_master_id"),
+            period_master=period_master_info,
+            date_start=p["date_start"],
+            date_end=p["date_end"],
+            content=p.get("content"),
+            is_deleted=p.get("is_deleted", False),
+            created_at=p["created_at"],
+            updated_at=p["updated_at"],
+            session_count=session_count.count or 0
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.put("/projects/{project_id}/periods/{period_id}", response_model=NavigantPeriodDetail)
+async def update_period(
+    project_id: str,
+    period_id: str,
+    data: NavigantPeriodUpdate,
+    user: CurrentUser = Depends(require_navigant)
+):
+    """Mettre a jour une periode"""
+    try:
+        if not await _verify_navigant_owns_project(user.active_profile_id, project_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce projet"
+            )
+
+        # Check if period has master
+        period = supabase_admin.table("period")\
+            .select("period_master_id")\
+            .eq("id", period_id)\
+            .eq("project_id", project_id)\
+            .single()\
+            .execute()
+
+        if not period.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Periode non trouvee"
+            )
+
+        # If has master, restrict name/date updates
+        has_master = period.data.get("period_master_id") is not None
+
+        update_data = {}
+        if data.content is not None:
+            update_data["content"] = data.content
+
+        if not has_master:
+            if data.name is not None:
+                update_data["name"] = data.name
+            if data.date_start is not None:
+                update_data["date_start"] = data.date_start.isoformat()
+            if data.date_end is not None:
+                update_data["date_end"] = data.date_end.isoformat()
+        else:
+            # Reject name/date updates for periods with master
+            if data.name is not None or data.date_start is not None or data.date_end is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Impossible de modifier le nom ou les dates d'une periode liee a un master"
+                )
+
+        if not update_data:
+            return await get_period_detail(project_id, period_id, user)
+
+        supabase_admin.table("period")\
+            .update(update_data)\
+            .eq("id", period_id)\
+            .eq("project_id", project_id)\
+            .execute()
+
+        return await get_period_detail(project_id, period_id, user)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.delete("/projects/{project_id}/periods/{period_id}")
+async def delete_period(
+    project_id: str,
+    period_id: str,
+    user: CurrentUser = Depends(require_navigant)
+):
+    """Soft delete d'une periode"""
+    try:
+        if not await _verify_navigant_owns_project(user.active_profile_id, project_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce projet"
+            )
+
+        response = supabase_admin.table("period")\
+            .update({"is_deleted": True})\
+            .eq("id", period_id)\
+            .eq("project_id", project_id)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Periode non trouvee"
+            )
+
+        return {"message": "Periode supprimee"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.post("/projects/{project_id}/periods/{period_id}/restore")
+async def restore_period(
+    project_id: str,
+    period_id: str,
+    user: CurrentUser = Depends(require_navigant)
+):
+    """Restaurer une periode supprimee"""
+    try:
+        if not await _verify_navigant_owns_project(user.active_profile_id, project_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce projet"
+            )
+
+        response = supabase_admin.table("period")\
+            .update({"is_deleted": False})\
+            .eq("id", period_id)\
+            .eq("project_id", project_id)\
+            .eq("is_deleted", True)\
+            .execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Periode non trouvee ou non supprimee"
+            )
+
+        return {"message": "Periode restauree"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+@router.get("/projects/{project_id}/periods/{period_id}/sessions", response_model=List[NavigantPeriodSessionItem])
+async def get_period_sessions(
+    project_id: str,
+    period_id: str,
+    user: CurrentUser = Depends(require_navigant)
+):
+    """Liste des sessions dans la periode (par date)"""
+    try:
+        if not await _verify_navigant_owns_project(user.active_profile_id, project_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces refuse a ce projet"
+            )
+
+        # Get period dates
+        period = supabase_admin.table("period")\
+            .select("date_start, date_end")\
+            .eq("id", period_id)\
+            .eq("project_id", project_id)\
+            .eq("is_deleted", False)\
+            .single()\
+            .execute()
+
+        if not period.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Periode non trouvee"
+            )
+
+        # Get sessions in date range
+        sessions = supabase_admin.table("session")\
+            .select("id, name, date_start, type_seance_id")\
+            .eq("project_id", project_id)\
+            .eq("is_deleted", False)\
+            .gte("date_start", period.data["date_start"])\
+            .lte("date_start", period.data["date_end"])\
+            .order("date_start", desc=True)\
+            .execute()
+
+        result = []
+        for s in sessions.data:
+            type_seance_name = None
+            if s.get("type_seance_id"):
+                ts = supabase_admin.table("type_seance")\
+                    .select("name")\
+                    .eq("id", s["type_seance_id"])\
+                    .single()\
+                    .execute()
+                if ts.data:
+                    type_seance_name = ts.data["name"]
+
+            result.append(NavigantPeriodSessionItem(
+                session_id=s["id"],
+                session_name=s["name"],
+                date_start=s.get("date_start"),
+                type_seance_name=type_seance_name
+            ))
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur: {str(e)}"
+        )
+
+
+# ============================================
 # TYPE SEANCES (pour dropdowns)
 # ============================================
 

@@ -12,6 +12,8 @@ class EntityType(str, Enum):
     work_lead = "work_lead"
     work_lead_master = "work_lead_master"
     profile = "profile"
+    period = "period"
+    period_master = "period_master"
 
 
 class FileType(str, Enum):

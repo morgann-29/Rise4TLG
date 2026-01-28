@@ -243,6 +243,22 @@ function CoachLayout({ children }) {
                     Axes de travail
                   </Link>
 
+                  {/* Periodes */}
+                  <Link
+                    to={`/coach/groups/${group.id}/periods`}
+                    className={`flex items-center px-3 py-2 text-sm rounded-md ${
+                      location.pathname.includes(`/coach/groups/${group.id}/periods`)
+                        ? 'bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300'
+                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                    onClick={() => setSidebarOpen(false)}
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Periodes
+                  </Link>
+
                   {/* Projets */}
                   <Link
                     to={`/coach/groups/${group.id}/projects`}
