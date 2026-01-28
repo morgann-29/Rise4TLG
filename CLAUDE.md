@@ -17,7 +17,7 @@ backend/
     auth.py          # Helpers auth (get_current_user, require_admin, require_super_coach, require_coach, require_navigant)
     config.py        # Settings (SUPABASE_URL, clés)
     models/          # Pydantic schemas
-      file.py        # Files et références
+      file.py        # Files et références (+ ProcessingStatus enum)
       group.py       # Groupes et détails
       project.py     # Projets
       type_seance.py # Types de séances
@@ -26,8 +26,10 @@ backend/
       work_lead_master.py # Modèles d'axes de travail
       session_master.py # Modèles de séances
       period.py      # Périodes (period_master et period)
+    services/        # Services métier
+      media_processor.py # Compression images/vidéos, génération thumbnails (Pillow, FFmpeg)
     routers/         # Endpoints API
-      file.py        # Upload, partage, suppression fichiers
+      file.py        # Upload, partage, suppression fichiers (+ traitement média async)
       group.py       # CRUD groupes + gestion coachs/projets
       project.py     # CRUD projets
       type_seance.py # CRUD types séances
@@ -283,6 +285,14 @@ cd frontend && npm start
 - Suppression intelligente: source supprime aussi les références
 - URLs signées avec expiration, rafraîchissables via `/resolve-urls`
 
+**Traitement média (compression & thumbnails):**
+- **Images** : compression client-side via `browser-image-compression` (max 2MB, 1920px, JPEG 80%), puis thumbnail backend 400x400 via Pillow
+- **Vidéos** : upload direct, puis compression async backend via FFmpeg (H.264, max 1080p, CRF 23) + extraction thumbnail à 1s
+- **Statut de traitement** : `processing_status` enum (ready, pending, processing, failed)
+- **Champs DB** : `thumbnail_path`, `processing_status`, `processing_error`, `original_file_size`
+- **UI** : spinner pendant le traitement, polling auto toutes les 5s, badge erreur si échec
+- **Prérequis serveur** : FFmpeg installé et dans le PATH
+
 ## Composants Frontend clés
 
 ### ContentEditor
@@ -301,11 +311,13 @@ cd frontend && npm start
 
 ### FileManager (`FileManager/`)
 Architecture en 3 composants :
-- **FileGrid** (`FileGrid.js`) - Composant de présentation pur : grille/liste de fichiers, fullscreen modal (images/vidéos), pagination (pages classiques, 20/50/100 par page), téléchargement, ouverture PDF/nouvel onglet. Props : `files, total, offset, limit, onPageChange, onLimitChange, viewMode, readOnly, onDelete, renderFileActions`
-- **FileManager** (`index.js`) - Upload drag & drop, suppression avec confirmation, utilise FileGrid pour l'affichage. Props notables : `refreshTrigger` (incrémenter pour forcer le rechargement), `entityType`, `entityId`, `readOnly`
+- **FileGrid** (`FileGrid.js`) - Composant de présentation pur : grille/liste de fichiers, fullscreen modal (images/vidéos), pagination (pages classiques, 20/50/100 par page), téléchargement, ouverture PDF/nouvel onglet. Affiche thumbnails en grille, full-size en fullscreen. Indicateur de traitement (spinner) et badge erreur. Props : `files, total, offset, limit, onPageChange, onLimitChange, viewMode, readOnly, onDelete, renderFileActions`
+- **FileManager** (`index.js`) - Upload drag & drop (avec compression auto des images), suppression avec confirmation, polling auto toutes les 5s quand des fichiers sont en traitement. Props notables : `refreshTrigger` (incrémenter pour forcer le rechargement), `entityType`, `entityId`, `readOnly`
 - **MasterFilesSection** (`MasterFilesSection.js`) - Section collapsible pour les fichiers d'une entité master (session_master, period_master). Affiche les fichiers master avec bouton "Associer" et badge "Ajouté" pour les fichiers déjà partagés. Utilise FileGrid en interne. Props : `masterEntityType, masterEntityId, targetEntityType, targetEntityId, onFileShared`
 
 **Pagination backend** : `GET /api/files/{entity_type}/{entity_id}?offset=0&limit=20` retourne `{items, total, offset, limit}`. Limit max: 100. Sources d'abord, puis références, triés par `created_at DESC`.
+
+**fileService helpers** : `compressImage(file)`, `isProcessing(file)`, `isProcessingFailed(file)`, `getDisplayUrl(file)` (retourne thumbnail_url ou signed_url)
 
 ### LocationPicker
 - Carte Leaflet (OpenStreetMap)

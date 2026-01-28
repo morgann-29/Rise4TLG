@@ -1,4 +1,14 @@
 import api from './api'
+import imageCompression from 'browser-image-compression'
+
+// Configuration de compression des images
+const IMAGE_COMPRESSION_OPTIONS = {
+  maxSizeMB: 2,           // Taille max en MB
+  maxWidthOrHeight: 1920, // Dimension max
+  useWebWorker: true,     // Utiliser un web worker pour les perfs
+  fileType: 'image/jpeg', // Convertir en JPEG
+  initialQuality: 0.8     // Qualite 80%
+}
 
 export const fileService = {
   // ============================================
@@ -6,7 +16,44 @@ export const fileService = {
   // ============================================
 
   /**
-   * Upload un fichier vers une entite
+   * Compresse une image avant upload
+   * @param {File} file - Fichier image a compresser
+   * @returns {Promise<File>} Fichier compresse
+   */
+  async compressImage(file) {
+    // Skip si ce n'est pas une image
+    if (!file.type.startsWith('image/')) {
+      return file
+    }
+
+    // Skip les GIFs (pour preserver l'animation)
+    if (file.type === 'image/gif') {
+      return file
+    }
+
+    // Skip les petites images (< 500KB)
+    if (file.size < 500 * 1024) {
+      return file
+    }
+
+    try {
+      console.log(`Compression image: ${file.name} (${this.formatFileSize(file.size)})`)
+      const compressedFile = await imageCompression(file, IMAGE_COMPRESSION_OPTIONS)
+      console.log(`Compresse a: ${this.formatFileSize(compressedFile.size)}`)
+
+      // Retourner un nouveau File avec le nom original
+      return new File([compressedFile], file.name, {
+        type: compressedFile.type,
+        lastModified: Date.now()
+      })
+    } catch (error) {
+      console.error('Echec compression image, utilisation de l\'original:', error)
+      return file // Fallback sur l'original en cas d'erreur
+    }
+  },
+
+  /**
+   * Upload un fichier vers une entite (avec compression auto pour les images)
    * @param {File} file - Fichier a uploader
    * @param {string} entityType - Type d'entite (project, group, session, etc.)
    * @param {string} entityId - ID de l'entite
@@ -14,8 +61,16 @@ export const fileService = {
    * @returns {Promise<Object>} Fichier cree avec signed_url
    */
   async uploadFile(file, entityType, entityId, fileType = null) {
+    let fileToUpload = file
+
+    // Compresser les images avant upload
+    const detectedType = fileType || this.detectFileType(file.type)
+    if (detectedType === 'image') {
+      fileToUpload = await this.compressImage(file)
+    }
+
     const formData = new FormData()
-    formData.append('file', file)
+    formData.append('file', fileToUpload)
     formData.append('origin_entity_type', entityType)
     formData.append('origin_entity_id', entityId)
     if (fileType) {
@@ -175,6 +230,27 @@ export const fileService = {
    */
   isViewable(file) {
     return this.isImage(file) || this.isVideo(file)
+  },
+
+  /**
+   * Verifie si un fichier est en cours de traitement (thumbnail/compression)
+   */
+  isProcessing(file) {
+    return file.processing_status === 'pending' || file.processing_status === 'processing'
+  },
+
+  /**
+   * Verifie si le traitement d'un fichier a echoue
+   */
+  isProcessingFailed(file) {
+    return file.processing_status === 'failed'
+  },
+
+  /**
+   * Retourne l'URL d'affichage pour un fichier (thumbnail si dispo, sinon signed_url)
+   */
+  getDisplayUrl(file) {
+    return file.thumbnail_url || file.signed_url
   },
 
   /**

@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Query, status
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Query, status, BackgroundTasks
 from typing import List, Optional
 from app.models.file import (
     EntityType, FileType, FileResponse, FileListResponse, FileReferenceCreate,
     FileReferenceResponse, SignedUrlRequest, SignedUrlResponse, FileDeleteInfo
 )
 from app.auth import get_current_user, get_current_profile_id, CurrentUser, supabase_admin
+from app.services.media_processor import process_image_thumbnail, process_video
 import uuid
 
 router = APIRouter(prefix="/api/files", tags=["files"])
@@ -39,12 +40,27 @@ def _get_signed_url(file_path: str) -> Optional[str]:
         return None
 
 
+def _get_thumbnail_url(thumbnail_path: Optional[str]) -> Optional[str]:
+    """Genere une URL signee pour un thumbnail"""
+    if not thumbnail_path:
+        return None
+    return _get_signed_url(thumbnail_path)
+
+
+def _add_urls_to_file(file_data: dict) -> dict:
+    """Ajoute signed_url et thumbnail_url a un fichier"""
+    file_data["signed_url"] = _get_signed_url(file_data["file_path"])
+    file_data["thumbnail_url"] = _get_thumbnail_url(file_data.get("thumbnail_path"))
+    return file_data
+
+
 # ============================================
 # ROUTES STATIQUES (doivent etre AVANT les routes dynamiques)
 # ============================================
 
 @router.post("/upload", response_model=FileResponse, status_code=status.HTTP_201_CREATED)
 async def upload_file(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     origin_entity_type: EntityType = Form(...),
     origin_entity_id: str = Form(...),
@@ -67,6 +83,11 @@ async def upload_file(
         # Detecter le type si non fourni
         detected_file_type = file_type or _detect_file_type(file.content_type)
 
+        # Determiner le status de processing initial
+        # Images et videos necessitent un traitement (thumbnail + compression video)
+        needs_processing = detected_file_type in (FileType.image, FileType.video)
+        processing_status = "pending" if needs_processing else "ready"
+
         # Upload vers Supabase Storage
         storage_response = supabase_admin.storage.from_(BUCKET_NAME).upload(
             file_path,
@@ -84,7 +105,8 @@ async def upload_file(
             "file_path": file_path,
             "file_size": file_size,
             "mime_type": file.content_type,
-            "uploaded_by": profile_id
+            "uploaded_by": profile_id,
+            "processing_status": processing_status
         }
 
         response = supabase_admin.table("files").insert(file_data).execute()
@@ -97,8 +119,28 @@ async def upload_file(
                 detail="Erreur lors de l'enregistrement du fichier"
             )
 
+        # Declencher le traitement en arriere-plan
+        if detected_file_type == FileType.image:
+            background_tasks.add_task(
+                process_image_thumbnail,
+                supabase_admin,
+                file_id,
+                file_path,
+                BUCKET_NAME
+            )
+        elif detected_file_type == FileType.video:
+            background_tasks.add_task(
+                process_video,
+                supabase_admin,
+                file_id,
+                file_path,
+                BUCKET_NAME,
+                file_size
+            )
+
         result = response.data[0]
         result["signed_url"] = _get_signed_url(file_path)
+        result["thumbnail_url"] = None  # Pas encore de thumbnail
         result["is_reference"] = False
 
         return result
@@ -156,7 +198,7 @@ async def get_file(
             )
 
         result = response.data[0]
-        result["signed_url"] = _get_signed_url(result["file_path"])
+        _add_urls_to_file(result)
         result["is_reference"] = False
 
         return result
@@ -273,7 +315,7 @@ async def list_files(
                 .execute()
 
             for f in source_response.data:
-                f["signed_url"] = _get_signed_url(f["file_path"])
+                _add_urls_to_file(f)
                 f["is_reference"] = False
                 f["reference_id"] = None
                 files.append(f)
@@ -293,7 +335,7 @@ async def list_files(
             for ref in ref_response.data:
                 if ref.get("files"):
                     f = ref["files"]
-                    f["signed_url"] = _get_signed_url(f["file_path"])
+                    _add_urls_to_file(f)
                     f["is_reference"] = True
                     f["reference_id"] = ref["id"]
                     files.append(f)
@@ -332,7 +374,7 @@ async def list_images(
             .execute()
 
         for f in source_response.data:
-            f["signed_url"] = _get_signed_url(f["file_path"])
+            _add_urls_to_file(f)
             f["is_reference"] = False
             f["reference_id"] = None
             files.append(f)
@@ -348,7 +390,7 @@ async def list_images(
         for ref in ref_response.data:
             if ref.get("files") and ref["files"].get("file_type") == "image":
                 f = ref["files"]
-                f["signed_url"] = _get_signed_url(f["file_path"])
+                _add_urls_to_file(f)
                 f["is_reference"] = True
                 f["reference_id"] = ref["id"]
                 files.append(f)
@@ -398,8 +440,15 @@ async def delete_file(
             )
 
         if is_source:
-            # Supprimer du Storage
+            # Supprimer du Storage (fichier principal)
             supabase_admin.storage.from_(BUCKET_NAME).remove([file_data["file_path"]])
+
+            # Supprimer le thumbnail s'il existe
+            if file_data.get("thumbnail_path"):
+                try:
+                    supabase_admin.storage.from_(BUCKET_NAME).remove([file_data["thumbnail_path"]])
+                except Exception:
+                    pass  # Ignorer les erreurs de suppression du thumbnail
 
             # Supprimer les references (cascade devrait le faire, mais on s'assure)
             supabase_admin.table("files_reference")\
@@ -488,7 +537,7 @@ async def share_file(
 
         result = response.data[0]
         result["file"] = file_response.data[0]
-        result["file"]["signed_url"] = _get_signed_url(result["file"]["file_path"])
+        _add_urls_to_file(result["file"])
 
         return result
 

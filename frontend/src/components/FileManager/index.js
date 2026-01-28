@@ -72,6 +72,20 @@ function FileManager({
     }
   }, [refreshTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Polling automatique quand des fichiers sont en cours de traitement
+  useEffect(() => {
+    const hasProcessingFiles = files.some(f => fileService.isProcessing(f))
+
+    if (!hasProcessingFiles) return
+
+    const pollInterval = setInterval(() => {
+      console.log('Polling for processing files...')
+      loadFiles()
+    }, 5000) // Poll toutes les 5 secondes
+
+    return () => clearInterval(pollInterval)
+  }, [files, loadFiles])
+
   // Gestion drag & drop
   const handleDrag = useCallback((e) => {
     e.preventDefault()

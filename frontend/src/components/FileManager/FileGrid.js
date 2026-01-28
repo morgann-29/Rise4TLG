@@ -175,29 +175,57 @@ function FileGrid({
               {/* Thumbnail ou icone */}
               <div
                 className={`aspect-square flex items-center justify-center bg-gray-100 dark:bg-gray-800 ${
-                  fileService.isViewable(file) ? 'cursor-pointer' : ''
+                  fileService.isViewable(file) && !fileService.isProcessing(file) ? 'cursor-pointer' : ''
                 }`}
-                onClick={() => handleImageClick(file)}
+                onClick={() => !fileService.isProcessing(file) && handleImageClick(file)}
               >
-                {fileService.isImage(file) && file.signed_url ? (
+                {fileService.isImage(file) && fileService.getDisplayUrl(file) ? (
                   <img
-                    src={file.signed_url}
+                    src={fileService.getDisplayUrl(file)}
                     alt={file.file_name}
                     className="w-full h-full object-cover"
                   />
-                ) : fileService.isVideo(file) && file.signed_url ? (
+                ) : fileService.isVideo(file) ? (
                   <div className="relative w-full h-full">
-                    <video
-                      src={file.signed_url}
-                      className="w-full h-full object-cover"
-                      muted
-                      preload="metadata"
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                      <svg className="w-12 h-12 text-white/80" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M8 5v14l11-7z" />
-                      </svg>
-                    </div>
+                    {/* Thumbnail video ou fallback sur video element */}
+                    {file.thumbnail_url ? (
+                      <img
+                        src={file.thumbnail_url}
+                        alt={file.file_name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : file.signed_url && !fileService.isProcessing(file) ? (
+                      <video
+                        src={file.signed_url}
+                        className="w-full h-full object-cover"
+                        muted
+                        preload="metadata"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        {getFileIcon(file)}
+                      </div>
+                    )}
+                    {/* Overlay play icon (seulement si pas en traitement) */}
+                    {!fileService.isProcessing(file) && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                        <svg className="w-12 h-12 text-white/80" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M8 5v14l11-7z" />
+                        </svg>
+                      </div>
+                    )}
+                    {/* Indicateur de traitement en cours */}
+                    {fileService.isProcessing(file) && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                        <div className="text-center text-white">
+                          <svg className="animate-spin h-8 w-8 mx-auto mb-2" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                          <span className="text-xs">Traitement...</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   getFileIcon(file)
@@ -209,6 +237,15 @@ function FileGrid({
                 <div className="absolute top-2 left-2">
                   <span className="px-1.5 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
                     Partage
+                  </span>
+                </div>
+              )}
+
+              {/* Badge erreur traitement */}
+              {fileService.isProcessingFailed(file) && (
+                <div className="absolute top-2 left-2">
+                  <span className="px-1.5 py-0.5 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded">
+                    Erreur
                   </span>
                 </div>
               )}
@@ -282,29 +319,52 @@ function FileGrid({
             >
               {/* Icone */}
               <div className="flex-shrink-0 mr-3">
-                {fileService.isImage(file) && file.signed_url ? (
+                {fileService.isImage(file) && fileService.getDisplayUrl(file) ? (
                   <img
-                    src={file.signed_url}
+                    src={fileService.getDisplayUrl(file)}
                     alt={file.file_name}
                     className="w-10 h-10 object-cover rounded cursor-pointer"
                     onClick={() => handleImageClick(file)}
                   />
-                ) : fileService.isVideo(file) && file.signed_url ? (
+                ) : fileService.isVideo(file) ? (
                   <div
-                    className="relative w-10 h-10 rounded overflow-hidden cursor-pointer"
-                    onClick={() => handleImageClick(file)}
+                    className={`relative w-10 h-10 rounded overflow-hidden ${
+                      !fileService.isProcessing(file) ? 'cursor-pointer' : ''
+                    }`}
+                    onClick={() => !fileService.isProcessing(file) && handleImageClick(file)}
                   >
-                    <video
-                      src={file.signed_url}
-                      className="w-full h-full object-cover"
-                      muted
-                      preload="metadata"
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                      <svg className="w-5 h-5 text-white/80" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M8 5v14l11-7z" />
-                      </svg>
-                    </div>
+                    {file.thumbnail_url ? (
+                      <img
+                        src={file.thumbnail_url}
+                        alt={file.file_name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : file.signed_url && !fileService.isProcessing(file) ? (
+                      <video
+                        src={file.signed_url}
+                        className="w-full h-full object-cover"
+                        muted
+                        preload="metadata"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gray-200 dark:bg-gray-600">
+                        {fileService.isProcessing(file) ? (
+                          <svg className="animate-spin h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                        ) : (
+                          getFileIcon(file)
+                        )}
+                      </div>
+                    )}
+                    {!fileService.isProcessing(file) && (file.thumbnail_url || file.signed_url) && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                        <svg className="w-5 h-5 text-white/80" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M8 5v14l11-7z" />
+                        </svg>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   getFileIcon(file)
@@ -324,6 +384,18 @@ function FileGrid({
                     <>
                       <span>•</span>
                       <span className="text-blue-600 dark:text-blue-400">Partage</span>
+                    </>
+                  )}
+                  {fileService.isProcessing(file) && (
+                    <>
+                      <span>•</span>
+                      <span className="text-yellow-600 dark:text-yellow-400">Traitement...</span>
+                    </>
+                  )}
+                  {fileService.isProcessingFailed(file) && (
+                    <>
+                      <span>•</span>
+                      <span className="text-red-600 dark:text-red-400">Erreur</span>
                     </>
                   )}
                 </div>

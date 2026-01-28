@@ -432,11 +432,22 @@ CREATE TABLE IF NOT EXISTS files (
     -- en bytes
     mime_type TEXT,
     uploaded_by UUID NOT NULL REFERENCES profile(id) ON DELETE RESTRICT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    -- Media processing fields
+    thumbnail_path TEXT,
+    -- Path to thumbnail in Supabase Storage (400x400)
+    processing_status TEXT DEFAULT 'ready' CHECK (
+        processing_status IN ('ready', 'pending', 'processing', 'failed')
+    ),
+    processing_error TEXT,
+    -- Error message if processing failed
+    original_file_size INTEGER -- Original size before video compression
 );
 CREATE INDEX idx_files_origin ON files(origin_entity_type, origin_entity_id);
 CREATE INDEX idx_files_uploaded_by ON files(uploaded_by);
 CREATE INDEX idx_files_file_type ON files(file_type);
+CREATE INDEX idx_files_processing_status ON files(processing_status)
+WHERE processing_status IN ('pending', 'processing');
 -- Table files_reference (références secondaires vers un fichier)
 CREATE TABLE IF NOT EXISTS files_reference (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

@@ -26,6 +26,13 @@ class FileType(str, Enum):
     other = "other"
 
 
+class ProcessingStatus(str, Enum):
+    ready = "ready"
+    pending = "pending"
+    processing = "processing"
+    failed = "failed"
+
+
 class FileBase(BaseModel):
     file_name: str
     file_type: FileType
@@ -51,6 +58,12 @@ class FileResponse(BaseModel):
     signed_url: Optional[str] = None
     is_reference: bool = False  # True si c'est un fichier partagé (pas la source)
     reference_id: Optional[str] = None  # ID de la référence si is_reference=True
+    # Thumbnail and processing fields
+    thumbnail_path: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    processing_status: str = "ready"
+    processing_error: Optional[str] = None
+    original_file_size: Optional[int] = None
 
     class Config:
         from_attributes = True

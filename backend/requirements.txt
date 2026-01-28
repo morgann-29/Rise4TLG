@@ -21,3 +21,8 @@ passlib==1.7.4
 
 # Multipart form data
 python-multipart==0.0.21
+
+# Media processing
+Pillow>=10.0.0
+ffmpeg-python==0.2.0
+aiofiles==25.1.0
