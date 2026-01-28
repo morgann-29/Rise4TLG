@@ -15,6 +15,7 @@ export function AuthProvider({ children }) {
   const [activeProfile, setActiveProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const isMounted = useRef(true)
+  const profilesLoadedRef = useRef(false) // Eviter double chargement des profils
 
   // Charger les profils de l'utilisateur depuis le backend
   const loadProfiles = async () => {
@@ -55,7 +56,9 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     isMounted.current = true
+    profilesLoadedRef.current = false
     let subscription = null
+    let initCompleted = false
 
     const init = async () => {
       try {
@@ -65,7 +68,8 @@ export function AuthProvider({ children }) {
 
         setSession(session)
         setUser(session?.user ?? null)
-        if (session?.user) {
+        if (session?.user && !profilesLoadedRef.current) {
+          profilesLoadedRef.current = true
           await loadProfiles()
         }
       } catch (err) {
@@ -75,21 +79,31 @@ export function AuthProvider({ children }) {
       } finally {
         if (isMounted.current) {
           setLoading(false)
+          initCompleted = true
         }
       }
     }
 
     init()
 
-    // Listen for auth changes
+    // Listen for auth changes (ignore events during init to avoid double load)
     const authListener = authService.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
         if (!isMounted.current) return
+
+        // Ignorer l'evenement INITIAL_SESSION qui fire pendant l'init
+        if (event === 'INITIAL_SESSION' && !initCompleted) return
+
         setSession(session)
         setUser(session?.user ?? null)
         if (session?.user) {
-          await loadProfiles()
+          // Recharger les profils seulement si c'est un vrai changement d'auth
+          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            profilesLoadedRef.current = true
+            await loadProfiles()
+          }
         } else {
+          profilesLoadedRef.current = false
           setProfiles([])
           setActiveProfile(null)
         }

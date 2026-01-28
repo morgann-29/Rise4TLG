@@ -6,8 +6,16 @@ from app.auth import get_current_user, require_super_coach, CurrentUser, supabas
 router = APIRouter(prefix="/api/groups", tags=["groups"])
 
 
+def _format_user_name(first_name: str = None, last_name: str = None) -> str:
+    """Formate le nom complet a partir de first_name et last_name"""
+    if first_name or last_name:
+        return f"{first_name or ''} {last_name or ''}".strip()
+    return None
+
+
 def _get_user_info(user_uid: str) -> dict:
-    """Recupere les infos utilisateur depuis auth.users"""
+    """Recupere les infos utilisateur depuis auth.users (DEPRECATED - utiliser les colonnes profile)"""
+    # NOTE: Cette fonction est conservee pour les cas ou on a besoin de l'email
     try:
         user_response = supabase_admin.auth.admin.get_user_by_id(user_uid)
         if user_response and user_response.user:
@@ -76,17 +84,19 @@ async def list_coaches(
 ):
     """Liste tous les profils de type Coach pour le dropdown"""
     try:
+        # Inclure first_name/last_name directement depuis profile
         response = supabase_admin.table("profile")\
-            .select("id, user_uid")\
+            .select("id, first_name, last_name")\
             .eq("type_profile_id", COACH_PROFILE_TYPE_ID)\
             .execute()
 
         coaches = []
         for profile in response.data:
-            user_info = _get_user_info(profile["user_uid"])
             coaches.append(CoachInfo(
                 profile_id=profile["id"],
-                **user_info
+                user_email=None,  # Email non charge pour performance
+                user_first_name=profile.get("first_name"),
+                user_last_name=profile.get("last_name")
             ))
 
         return coaches
@@ -123,27 +133,27 @@ async def get_group(
         if "type_support" in group_data:
             del group_data["type_support"]
 
-        # Recuperer les coachs du groupe
+        # Recuperer les coachs du groupe (first_name/last_name depuis profile)
         coaches_response = supabase_admin.table("group_profile")\
-            .select("profile_id, profile(user_uid)")\
+            .select("profile_id, profile(first_name, last_name)")\
             .eq("group_id", group_id)\
             .execute()
 
         coaches = []
         for gp in coaches_response.data:
             profile = gp.get("profile", {})
-            user_uid = profile.get("user_uid") if profile else None
-            user_info = _get_user_info(user_uid) if user_uid else {}
             coaches.append(CoachInfo(
                 profile_id=gp["profile_id"],
-                **user_info
+                user_email=None,  # Email non charge pour performance
+                user_first_name=profile.get("first_name") if profile else None,
+                user_last_name=profile.get("last_name") if profile else None
             ))
         group_data["coaches"] = coaches
         group_data["coaches_count"] = len(coaches)
 
-        # Recuperer les projets du groupe
+        # Recuperer les projets du groupe (first_name/last_name depuis profile)
         projects_response = supabase_admin.table("group_project")\
-            .select("project_id, project(id, name, type_support_id, type_support(name), profile_id, profile(user_uid))")\
+            .select("project_id, project(id, name, type_support_id, type_support(name), profile_id, profile(first_name, last_name))")\
             .eq("group_id", group_id)\
             .execute()
 
@@ -151,15 +161,11 @@ async def get_group(
         for gp in projects_response.data:
             project = gp.get("project")
             if project:
-                # Recuperer nom du navigant
+                # Recuperer nom du navigant depuis profile
                 navigant_name = None
                 profile = project.get("profile")
-                if profile and profile.get("user_uid"):
-                    user_info = _get_user_info(profile["user_uid"])
-                    if user_info.get("user_first_name") or user_info.get("user_last_name"):
-                        navigant_name = f"{user_info.get('user_first_name', '')} {user_info.get('user_last_name', '')}".strip()
-                    elif user_info.get("user_email"):
-                        navigant_name = user_info["user_email"]
+                if profile:
+                    navigant_name = _format_user_name(profile.get("first_name"), profile.get("last_name"))
 
                 type_support = project.get("type_support")
                 projects.append(ProjectInfo(
@@ -434,9 +440,9 @@ async def list_available_projects(
 
         existing_ids = [p["project_id"] for p in existing.data]
 
-        # Recuperer tous les projets actifs
+        # Recuperer tous les projets actifs (first_name/last_name depuis profile)
         query = supabase_admin.table("project")\
-            .select("id, name, type_support(name), profile(user_uid)")\
+            .select("id, name, type_support(name), profile(first_name, last_name)")\
             .eq("is_deleted", False)
 
         response = query.order("name").execute()
@@ -444,15 +450,11 @@ async def list_available_projects(
         projects = []
         for project in response.data:
             if project["id"] not in existing_ids:
-                # Recuperer nom du navigant
+                # Recuperer nom du navigant depuis profile
                 navigant_name = None
                 profile = project.get("profile")
-                if profile and profile.get("user_uid"):
-                    user_info = _get_user_info(profile["user_uid"])
-                    if user_info.get("user_first_name") or user_info.get("user_last_name"):
-                        navigant_name = f"{user_info.get('user_first_name', '')} {user_info.get('user_last_name', '')}".strip()
-                    elif user_info.get("user_email"):
-                        navigant_name = user_info["user_email"]
+                if profile:
+                    navigant_name = _format_user_name(profile.get("first_name"), profile.get("last_name"))
 
                 type_support = project.get("type_support")
                 projects.append(ProjectInfo(

@@ -121,8 +121,17 @@ class GroupProject(BaseModel):
 # HELPERS
 # ============================================
 
+def _format_user_name(first_name: str = None, last_name: str = None) -> str:
+    """Formate le nom complet a partir de first_name et last_name"""
+    if first_name or last_name:
+        return f"{first_name or ''} {last_name or ''}".strip()
+    return None
+
+
 def _get_user_info(user_uid: str) -> dict:
-    """Recupere les infos utilisateur depuis auth.users"""
+    """Recupere les infos utilisateur depuis auth.users (DEPRECATED - utiliser les colonnes profile)"""
+    # NOTE: Cette fonction est conservee pour les cas ou on a besoin de l'email
+    # Pour first_name/last_name, utiliser directement les colonnes de profile
     try:
         user_response = supabase_admin.auth.admin.get_user_by_id(user_uid)
         if user_response and user_response.user:
@@ -153,14 +162,12 @@ def _get_coach_name(profile_id: Optional[str]) -> Optional[str]:
         return None
     try:
         profile = supabase_admin.table("profile")\
-            .select("user_uid")\
+            .select("first_name, last_name")\
             .eq("id", profile_id)\
             .execute()
-        if profile.data and profile.data[0].get("user_uid"):
-            user_info = _get_user_info(profile.data[0]["user_uid"])
-            if user_info.get("first_name") or user_info.get("last_name"):
-                return f"{user_info.get('first_name', '')} {user_info.get('last_name', '')}".strip()
-            return user_info.get("email")
+        if profile.data:
+            p = profile.data[0]
+            return _format_user_name(p.get("first_name"), p.get("last_name"))
     except:
         pass
     return None
@@ -183,8 +190,9 @@ def _get_session_projects(session_master_id: str) -> list:
     """Recupere les projets lies a une session_master via la table session"""
     try:
         # Requete sur session pour trouver les projets participants
+        # Inclut first_name et last_name directement depuis profile
         response = supabase_admin.table("session")\
-            .select("id, project_id, project(id, name, profile(user_uid))")\
+            .select("id, project_id, project(id, name, profile(first_name, last_name))")\
             .eq("session_master_id", session_master_id)\
             .eq("is_deleted", False)\
             .execute()
@@ -200,12 +208,8 @@ def _get_session_projects(session_master_id: str) -> list:
                 seen_project_ids.add(project_id)
                 navigant_name = None
                 profile = project.get("profile")
-                if profile and profile.get("user_uid"):
-                    user_info = _get_user_info(profile["user_uid"])
-                    if user_info.get("first_name") or user_info.get("last_name"):
-                        navigant_name = f"{user_info.get('first_name', '')} {user_info.get('last_name', '')}".strip()
-                    else:
-                        navigant_name = user_info.get("email")
+                if profile:
+                    navigant_name = _format_user_name(profile.get("first_name"), profile.get("last_name"))
                 projects.append({
                     "id": project["id"],
                     "name": project["name"],
@@ -556,9 +560,9 @@ async def get_my_group(group_id: str, user: CurrentUser = Depends(require_coach)
 
         g = response.data[0]
 
-        # Recuperer les projets
+        # Recuperer les projets (avec first_name/last_name depuis profile)
         projects_response = supabase_admin.table("group_project")\
-            .select("project(id, name, type_support(name), profile(user_uid))")\
+            .select("project(id, name, type_support(name), profile(first_name, last_name))")\
             .eq("group_id", group_id)\
             .execute()
 
@@ -567,13 +571,9 @@ async def get_my_group(group_id: str, user: CurrentUser = Depends(require_coach)
             project = gp.get("project")
             if project:
                 navigant_name = None
-                navigant_email = None
                 profile = project.get("profile")
-                if profile and profile.get("user_uid"):
-                    user_info = _get_user_info(profile["user_uid"])
-                    if user_info.get("first_name") or user_info.get("last_name"):
-                        navigant_name = f"{user_info.get('first_name', '')} {user_info.get('last_name', '')}".strip()
-                    navigant_email = user_info.get("email")
+                if profile:
+                    navigant_name = _format_user_name(profile.get("first_name"), profile.get("last_name"))
 
                 type_support = project.get("type_support")
                 projects.append({
@@ -581,7 +581,7 @@ async def get_my_group(group_id: str, user: CurrentUser = Depends(require_coach)
                     "name": project["name"],
                     "type_support_name": type_support.get("name") if type_support else None,
                     "navigant_name": navigant_name,
-                    "navigant_email": navigant_email
+                    "navigant_email": None  # Email non charge pour performance
                 })
 
         # Compteurs
@@ -1459,8 +1459,9 @@ async def list_group_projects(
                 detail="Acces refuse a ce groupe"
             )
 
+        # Inclure first_name/last_name directement depuis profile (evite N+1 sur Auth API)
         response = supabase_admin.table("group_project")\
-            .select("project(id, name, type_support(name), profile(user_uid))")\
+            .select("project(id, name, type_support(name), profile(first_name, last_name))")\
             .eq("group_id", group_id)\
             .execute()
 
@@ -1469,13 +1470,9 @@ async def list_group_projects(
             project = gp.get("project")
             if project:
                 navigant_name = None
-                navigant_email = None
                 profile = project.get("profile")
-                if profile and profile.get("user_uid"):
-                    user_info = _get_user_info(profile["user_uid"])
-                    if user_info.get("first_name") or user_info.get("last_name"):
-                        navigant_name = f"{user_info.get('first_name', '')} {user_info.get('last_name', '')}".strip()
-                    navigant_email = user_info.get("email")
+                if profile:
+                    navigant_name = _format_user_name(profile.get("first_name"), profile.get("last_name"))
 
                 type_support = project.get("type_support")
                 projects.append(GroupProject(
@@ -1483,7 +1480,7 @@ async def list_group_projects(
                     name=project["name"],
                     type_support_name=type_support.get("name") if type_support else None,
                     navigant_name=navigant_name,
-                    navigant_email=navigant_email
+                    navigant_email=None  # Email non charge pour performance
                 ))
 
         return projects
@@ -1631,26 +1628,22 @@ def _get_current_status_for_work_lead(work_lead_id: str) -> str:
 def _get_session_crew(session_id: str) -> List[CoachCrewMember]:
     """Recupere l'equipage d'une session"""
     try:
+        # Inclure first_name/last_name directement depuis profile
         response = supabase_admin.table("session_profile")\
-            .select("profile_id, profile(user_uid)")\
+            .select("profile_id, profile(first_name, last_name)")\
             .eq("session_id", session_id)\
             .execute()
 
         crew = []
         for sp in response.data:
             profile = sp.get("profile", {})
-            user_uid = profile.get("user_uid") if profile else None
             name = None
-            email = None
-            if user_uid:
-                user_info = _get_user_info(user_uid)
-                if user_info.get("first_name") or user_info.get("last_name"):
-                    name = f"{user_info.get('first_name', '')} {user_info.get('last_name', '')}".strip()
-                email = user_info.get("email")
+            if profile:
+                name = _format_user_name(profile.get("first_name"), profile.get("last_name"))
             crew.append(CoachCrewMember(
                 profile_id=sp["profile_id"],
                 name=name,
-                email=email
+                email=None  # Email non charge pour performance
             ))
         return crew
     except:
@@ -1747,9 +1740,9 @@ async def get_project_detail(
                 detail="Projet non trouve dans ce groupe"
             )
 
-        # Recuperer le projet avec ses relations
+        # Recuperer le projet avec ses relations (first_name/last_name depuis profile)
         response = supabase_admin.table("project")\
-            .select("id, name, type_support(name), profile(user_uid)")\
+            .select("id, name, type_support(name), profile(first_name, last_name)")\
             .eq("id", project_id)\
             .eq("is_deleted", False)\
             .execute()
@@ -1762,15 +1755,11 @@ async def get_project_detail(
 
         project = response.data[0]
 
-        # Recuperer infos navigant
+        # Recuperer infos navigant depuis profile
         navigant_name = None
-        navigant_email = None
         profile = project.get("profile")
-        if profile and profile.get("user_uid"):
-            user_info = _get_user_info(profile["user_uid"])
-            if user_info.get("first_name") or user_info.get("last_name"):
-                navigant_name = f"{user_info.get('first_name', '')} {user_info.get('last_name', '')}".strip()
-            navigant_email = user_info.get("email")
+        if profile:
+            navigant_name = _format_user_name(profile.get("first_name"), profile.get("last_name"))
 
         # Compter les sessions
         sessions_count = supabase_admin.table("session")\
@@ -1801,7 +1790,7 @@ async def get_project_detail(
             name=project["name"],
             type_support_name=type_support.get("name") if type_support else None,
             navigant_name=navigant_name,
-            navigant_email=navigant_email,
+            navigant_email=None,  # Email non charge pour performance
             sessions_count=sessions_count.count or 0,
             work_leads_count=work_leads_count.count or 0,
             periods_count=periods_count.count or 0
@@ -3267,8 +3256,9 @@ async def list_group_coaches(
             )
 
         # Recuperer les profiles de type Coach (type_profile_id=3) lies au groupe
+        # Inclure first_name/last_name directement depuis profile
         response = supabase_admin.table("group_profile")\
-            .select("profile_id, profile(user_uid, type_profile_id)")\
+            .select("profile_id, profile(type_profile_id, first_name, last_name)")\
             .eq("group_id", group_id)\
             .execute()
 
@@ -3276,14 +3266,11 @@ async def list_group_coaches(
         for gp in response.data:
             profile = gp.get("profile")
             if profile and profile.get("type_profile_id") == 3:  # Coach
-                user_info = _get_user_info(profile["user_uid"]) if profile.get("user_uid") else {}
-                name = None
-                if user_info.get("first_name") or user_info.get("last_name"):
-                    name = f"{user_info.get('first_name', '')} {user_info.get('last_name', '')}".strip()
+                name = _format_user_name(profile.get("first_name"), profile.get("last_name"))
                 coaches.append(GroupCoach(
                     profile_id=gp["profile_id"],
                     name=name,
-                    email=user_info.get("email")
+                    email=None  # Email non charge pour performance
                 ))
 
         return coaches

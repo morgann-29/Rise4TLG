@@ -119,7 +119,7 @@ function useResolveFileUrls(htmlContent, entityType, entityId) {
     // Debounce de 100ms pour eviter les appels multiples
     const timeoutId = setTimeout(resolveUrls, 100)
     return () => clearTimeout(timeoutId)
-  }, [htmlContent, entityType, entityId, resolvedContent])
+  }, [htmlContent, entityType, entityId]) // resolvedContent retire - c'est le state qu'on modifie
 
   return resolvedContent
 }

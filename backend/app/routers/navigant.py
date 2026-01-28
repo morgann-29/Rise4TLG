@@ -240,8 +240,16 @@ def _get_work_lead_types_lookup() -> dict:
         return {}
 
 
+def _format_user_name(first_name: str = None, last_name: str = None) -> str:
+    """Formate le nom complet a partir de first_name et last_name"""
+    if first_name or last_name:
+        return f"{first_name or ''} {last_name or ''}".strip()
+    return None
+
+
 def _get_user_info(user_uid: str) -> dict:
-    """Recupere les infos utilisateur depuis auth.users"""
+    """Recupere les infos utilisateur depuis auth.users (DEPRECATED - utiliser les colonnes profile)"""
+    # NOTE: Cette fonction est conservee pour les cas ou on a besoin de l'email
     try:
         user_response = supabase_admin.auth.admin.get_user_by_id(user_uid)
         if user_response and user_response.user:
@@ -257,46 +265,39 @@ def _get_user_info(user_uid: str) -> dict:
 
 
 def _get_profile_name(profile_id: str) -> Optional[str]:
-    """Recupere le nom d'un profil"""
+    """Recupere le nom d'un profil directement depuis profile"""
     try:
         response = supabase_admin.table("profile")\
-            .select("user_uid")\
+            .select("first_name, last_name")\
             .eq("id", profile_id)\
             .limit(1)\
             .execute()
-        if response.data and response.data[0].get("user_uid"):
-            user_info = _get_user_info(response.data[0]["user_uid"])
-            if user_info.get("first_name") or user_info.get("last_name"):
-                return f"{user_info.get('first_name', '')} {user_info.get('last_name', '')}".strip()
-            return user_info.get("email")
+        if response.data:
+            p = response.data[0]
+            return _format_user_name(p.get("first_name"), p.get("last_name"))
         return None
     except:
         return None
 
 
 def _get_session_crew(session_id: str) -> List[CrewMember]:
-    """Recupere l'equipage d'une session"""
+    """Recupere l'equipage d'une session (first_name/last_name depuis profile)"""
     try:
         response = supabase_admin.table("session_profile")\
-            .select("profile_id, profile(user_uid)")\
+            .select("profile_id, profile(first_name, last_name)")\
             .eq("session_id", session_id)\
             .execute()
 
         crew = []
         for sp in response.data:
             profile = sp.get("profile", {})
-            user_uid = profile.get("user_uid") if profile else None
             name = None
-            email = None
-            if user_uid:
-                user_info = _get_user_info(user_uid)
-                if user_info.get("first_name") or user_info.get("last_name"):
-                    name = f"{user_info.get('first_name', '')} {user_info.get('last_name', '')}".strip()
-                email = user_info.get("email")
+            if profile:
+                name = _format_user_name(profile.get("first_name"), profile.get("last_name"))
             crew.append(CrewMember(
                 profile_id=sp["profile_id"],
                 name=name,
-                email=email
+                email=None  # Email non charge pour performance
             ))
         return crew
     except:
@@ -2678,19 +2679,15 @@ async def get_period_detail(
                 .execute()
 
             if pm.data:
-                # Get profile name using existing helper
+                # Get profile name directly from profile table
                 profile_name = None
                 profile = supabase_admin.table("profile")\
-                    .select("user_uid")\
+                    .select("first_name, last_name")\
                     .eq("id", pm.data["profile_id"])\
                     .single()\
                     .execute()
                 if profile.data:
-                    user_info = _get_user_info(profile.data["user_uid"])
-                    if user_info.get("first_name") or user_info.get("last_name"):
-                        profile_name = f"{user_info.get('first_name', '')} {user_info.get('last_name', '')}".strip()
-                    else:
-                        profile_name = user_info.get("email")
+                    profile_name = _format_user_name(profile.data.get("first_name"), profile.data.get("last_name"))
 
                 period_master_info = NavigantPeriodMasterInfo(
                     id=pm.data["id"],

@@ -270,6 +270,19 @@ async def update_user_identity(
             {"user_metadata": new_metadata}
         )
 
+        # Synchroniser first_name/last_name vers tous les profils de cet utilisateur
+        profile_update = {}
+        if "first_name" in update_metadata:
+            profile_update["first_name"] = update_metadata["first_name"]
+        if "last_name" in update_metadata:
+            profile_update["last_name"] = update_metadata["last_name"]
+
+        if profile_update:
+            supabase_admin.table("profile")\
+                .update(profile_update)\
+                .eq("user_uid", user_id)\
+                .execute()
+
         return await get_user(user_id, admin)
 
     except HTTPException:
@@ -408,8 +421,17 @@ async def create_profile(
                 detail="Utilisateur non trouve"
             )
 
-        # Creer le profil
-        insert_data = {"user_uid": profile_data.user_uid}
+        # Recuperer first_name/last_name depuis auth.users
+        metadata = auth_user.user.user_metadata or {}
+        first_name = metadata.get("first_name")
+        last_name = metadata.get("last_name")
+
+        # Creer le profil avec first_name et last_name
+        insert_data = {
+            "user_uid": profile_data.user_uid,
+            "first_name": first_name,
+            "last_name": last_name
+        }
         if profile_data.type_profile_id:
             insert_data["type_profile_id"] = profile_data.type_profile_id
 

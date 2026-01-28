@@ -18,19 +18,13 @@ function CoachLayout({ children }) {
   const [groupsLoading, setGroupsLoading] = useState(true)
   const [expandedGroups, setExpandedGroups] = useState({})
 
-  // Charger les groupes du coach
+  // Charger les groupes du coach (une seule fois au mount)
   useEffect(() => {
     const loadGroups = async () => {
       try {
         setGroupsLoading(true)
         const data = await coachService.getMyGroups()
         setGroups(data || [])
-
-        // Ouvrir automatiquement le groupe actif basé sur l'URL
-        const match = location.pathname.match(/\/coach\/groups\/([^/]+)/)
-        if (match) {
-          setExpandedGroups(prev => ({ ...prev, [match[1]]: true }))
-        }
       } catch (err) {
         console.error('Erreur chargement groupes:', err)
       } finally {
@@ -38,6 +32,14 @@ function CoachLayout({ children }) {
       }
     }
     loadGroups()
+  }, [])
+
+  // Ouvrir automatiquement le groupe actif basé sur l'URL (sans recharger les groupes)
+  useEffect(() => {
+    const match = location.pathname.match(/\/coach\/groups\/([^/]+)/)
+    if (match) {
+      setExpandedGroups(prev => ({ ...prev, [match[1]]: true }))
+    }
   }, [location.pathname])
 
   // Fermer le menu utilisateur si clic en dehors

@@ -42,6 +42,7 @@ function FileManager({
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleteInfo, setDeleteInfo] = useState(null)
   const fileInputRef = useRef(null)
+  const loadFilesRef = useRef(null) // Ref pour eviter re-abonnement du polling
 
   // Charger les fichiers (pagine)
   const loadFiles = useCallback(async () => {
@@ -61,6 +62,11 @@ function FileManager({
     }
   }, [entityType, entityId, offset, limit])
 
+  // Garder une ref a jour de loadFiles pour le polling
+  useEffect(() => {
+    loadFilesRef.current = loadFiles
+  }, [loadFiles])
+
   useEffect(() => {
     loadFiles()
   }, [loadFiles])
@@ -73,6 +79,7 @@ function FileManager({
   }, [refreshTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Polling automatique quand des fichiers sont en cours de traitement
+  // Utilise une ref pour eviter le re-abonnement quand loadFiles change
   useEffect(() => {
     const hasProcessingFiles = files.some(f => fileService.isProcessing(f))
 
@@ -80,11 +87,11 @@ function FileManager({
 
     const pollInterval = setInterval(() => {
       console.log('Polling for processing files...')
-      loadFiles()
+      loadFilesRef.current?.()
     }, 5000) // Poll toutes les 5 secondes
 
     return () => clearInterval(pollInterval)
-  }, [files, loadFiles])
+  }, [files])
 
   // Gestion drag & drop
   const handleDrag = useCallback((e) => {

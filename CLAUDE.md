@@ -384,6 +384,17 @@ Architecture en 3 composants :
 - Trigger `check_session_master_coach_is_coach()` - Coach session doit être Coach
 - Les réponses API work_lead incluent `work_lead_type_parent_id` et `work_lead_type_parent_name` pour l'affichage hiérarchique
 
+### Dénormalisation des noms utilisateurs
+
+La table `profile` contient `first_name` et `last_name` (dénormalisés depuis `auth.users.raw_user_meta_data`). Cette optimisation évite les appels N+1 à l'API Supabase Auth lors du listing des projets/coachs.
+
+**Synchronisation:**
+- À la création d'un profil : les noms sont copiés depuis `auth.users`
+- À la mise à jour de l'identité (admin) : les noms sont synchronisés vers tous les profils du user
+- Migration `006_add_name_to_profile.sql` : peuple les données existantes + fonction trigger optionnelle
+
+**Usage backend:** Les routers utilisent `_format_user_name(first_name, last_name)` au lieu d'appeler `_get_user_info(user_uid)`
+
 ## Flux creation de seance (Coach)
 
 Quand un Coach cree une seance pour un groupe:

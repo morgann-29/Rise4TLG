@@ -77,12 +77,17 @@ CREATE TABLE IF NOT EXISTS profile (
     user_uid UUID NOT NULL,
     -- référence vers auth.users (un user peut avoir plusieurs profils)
     type_profile_id INTEGER NOT NULL REFERENCES type_profile(id) ON DELETE RESTRICT,
+    first_name TEXT,
+    -- dénormalisation depuis auth.users pour éviter N+1 API calls
+    last_name TEXT,
+    -- synchronisé lors de la création/mise à jour du profil
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE (user_uid, type_profile_id) -- un user ne peut pas avoir 2x le même type de profil
 );
 CREATE INDEX idx_profile_user_uid ON profile(user_uid);
 CREATE INDEX idx_profile_type_profile_id ON profile(type_profile_id);
+CREATE INDEX idx_profile_last_name ON profile(last_name);
 CREATE TRIGGER update_profile_updated_at BEFORE
 UPDATE ON profile FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 -- ============================================
