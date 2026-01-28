@@ -4,12 +4,12 @@ import { useAuth } from '../../contexts/AuthContext'
 import CoachLayout from '../../components/CoachLayout'
 import NavigantLayout from '../../components/NavigantLayout'
 import FileManager from '../../components/FileManager'
+import MasterFilesSection from '../../components/FileManager/MasterFilesSection'
 import ContentEditor from '../../components/ContentEditor'
 import RichTextEditor from '../../components/RichTextEditor'
 import LocationPicker from '../../components/LocationPicker'
 import { coachService } from '../../services/coachService'
 import { navigantService } from '../../services/navigantService'
-import { fileService } from '../../services/fileService'
 
 function SessionDetail() {
   const { sessionId, groupId, projectId } = useParams()
@@ -43,11 +43,8 @@ function SessionDetail() {
   // Contenu commun states
   const [contenuCommunExpanded, setContenuCommunExpanded] = useState(true)
 
-  // Fichiers communs states
-  const [fichiersCommunsExpanded, setFichiersCommunsExpanded] = useState(false)
-  const [masterFiles, setMasterFiles] = useState([])
-  const [masterFilesLoading, setMasterFilesLoading] = useState(false)
-  const [sharingFileId, setSharingFileId] = useState(null)
+  // File refresh trigger (for MasterFilesSection -> FileManager sync)
+  const [fileRefreshTrigger, setFileRefreshTrigger] = useState(0)
 
   // Both coach and navigant can edit their sessions (dates, location, weather, thematiques)
   const canEdit = true
@@ -76,26 +73,6 @@ function SessionDetail() {
   useEffect(() => {
     loadData()
   }, [loadData])
-
-  // Load master files when section is expanded
-  useEffect(() => {
-    if (fichiersCommunsExpanded && session?.session_master_id && masterFiles.length === 0) {
-      loadMasterFiles()
-    }
-  }, [fichiersCommunsExpanded, session?.session_master_id])
-
-  const loadMasterFiles = async () => {
-    if (!session?.session_master_id) return
-    try {
-      setMasterFilesLoading(true)
-      const files = await fileService.getFiles('session_master', session.session_master_id)
-      setMasterFiles(files)
-    } catch (err) {
-      console.error('Erreur chargement fichiers communs:', err)
-    } finally {
-      setMasterFilesLoading(false)
-    }
-  }
 
   // Save content handler
   const handleSaveContent = async (content) => {
@@ -289,19 +266,6 @@ function SessionDetail() {
       ...prev,
       [typeId]: !prev[typeId]
     }))
-  }
-
-  // Share file from master to session
-  const handleShareFile = async (fileId) => {
-    try {
-      setSharingFileId(fileId)
-      await fileService.shareFile(fileId, 'session', sessionId)
-    } catch (err) {
-      console.error('Erreur partage fichier:', err)
-      alert(err.response?.data?.detail || 'Erreur lors du partage')
-    } finally {
-      setSharingFileId(null)
-    }
   }
 
   // Status colors
@@ -726,6 +690,7 @@ function SessionDetail() {
               entityType="session"
               entityId={sessionId}
               readOnly={!canEdit}
+              refreshTrigger={fileRefreshTrigger}
               onFileUploaded={(file) => console.log('File uploaded:', file)}
               onFileDeleted={(fileId) => console.log('File deleted:', fileId)}
             />
@@ -734,73 +699,18 @@ function SessionDetail() {
 
         {/* Fichiers Communs Block (only if session_master) */}
         {session.session_master_id && (
-          <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
-            <button
-              onClick={() => setFichiersCommunsExpanded(!fichiersCommunsExpanded)}
-              className="w-full px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-            >
-              <div className="flex items-center">
-                <svg className={`w-5 h-5 mr-2 text-gray-500 dark:text-gray-400 transition-transform ${fichiersCommunsExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-                <div className="text-left">
-                  <h2 className="text-lg font-medium text-gray-900 dark:text-white">
-                    Fichiers Communs
-                  </h2>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Fichiers de la seance de groupe - selectionnez pour les associer
-                  </p>
-                </div>
-              </div>
-            </button>
-
-            {fichiersCommunsExpanded && (
-              <div className="p-6">
-                {masterFilesLoading ? (
-                  <div className="flex justify-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                  </div>
-                ) : masterFiles.length === 0 ? (
-                  <p className="text-center text-gray-500 dark:text-gray-400 py-4">
-                    Aucun fichier partage depuis la seance de groupe
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {masterFiles.map((file) => (
-                      <div
-                        key={file.id}
-                        className="relative group border border-gray-200 dark:border-gray-700 rounded-lg p-3 hover:border-blue-500 dark:hover:border-blue-400 transition-colors"
-                      >
-                        {file.file_type === 'image' && file.signed_url ? (
-                          <img
-                            src={file.signed_url}
-                            alt={file.file_name}
-                            className="w-full h-24 object-cover rounded mb-2"
-                          />
-                        ) : (
-                          <div className="w-full h-24 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center mb-2">
-                            <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                          </div>
-                        )}
-                        <p className="text-xs text-gray-600 dark:text-gray-300 truncate" title={file.file_name}>
-                          {file.file_name}
-                        </p>
-                        <button
-                          onClick={() => handleShareFile(file.id)}
-                          disabled={sharingFileId === file.id}
-                          className="mt-2 w-full px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded transition-colors disabled:opacity-50"
-                        >
-                          {sharingFileId === file.id ? 'Association...' : 'Associer a ma seance'}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          <MasterFilesSection
+            masterEntityType="session_master"
+            masterEntityId={session.session_master_id}
+            targetEntityType="session"
+            targetEntityId={sessionId}
+            title="Fichiers Communs"
+            description="Fichiers de la seance de groupe - selectionnez pour les associer"
+            emptyMessage="Aucun fichier partage depuis la seance de groupe"
+            shareButtonText="Associer a ma seance"
+            sharingText="Association..."
+            onFileShared={() => setFileRefreshTrigger(prev => prev + 1)}
+          />
         )}
       </div>
 

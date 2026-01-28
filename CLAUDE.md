@@ -299,10 +299,13 @@ cd frontend && npm start
 - Résolution automatique des URLs signées à l'affichage
 - Support dynamique du mode readOnly via setEditable()
 
-### FileManager
-- Upload drag & drop
-- Liste avec preview images
-- Suppression avec confirmation
+### FileManager (`FileManager/`)
+Architecture en 3 composants :
+- **FileGrid** (`FileGrid.js`) - Composant de présentation pur : grille/liste de fichiers, fullscreen modal (images/vidéos), pagination (pages classiques, 20/50/100 par page), téléchargement, ouverture PDF/nouvel onglet. Props : `files, total, offset, limit, onPageChange, onLimitChange, viewMode, readOnly, onDelete, renderFileActions`
+- **FileManager** (`index.js`) - Upload drag & drop, suppression avec confirmation, utilise FileGrid pour l'affichage. Props notables : `refreshTrigger` (incrémenter pour forcer le rechargement), `entityType`, `entityId`, `readOnly`
+- **MasterFilesSection** (`MasterFilesSection.js`) - Section collapsible pour les fichiers d'une entité master (session_master, period_master). Affiche les fichiers master avec bouton "Associer" et badge "Ajouté" pour les fichiers déjà partagés. Utilise FileGrid en interne. Props : `masterEntityType, masterEntityId, targetEntityType, targetEntityId, onFileShared`
+
+**Pagination backend** : `GET /api/files/{entity_type}/{entity_id}?offset=0&limit=20` retourne `{items, total, offset, limit}`. Limit max: 100. Sources d'abord, puis références, triés par `created_at DESC`.
 
 ### LocationPicker
 - Carte Leaflet (OpenStreetMap)

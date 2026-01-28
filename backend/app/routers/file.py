@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, status
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Query, status
 from typing import List, Optional
 from app.models.file import (
-    EntityType, FileType, FileResponse, FileReferenceCreate,
+    EntityType, FileType, FileResponse, FileListResponse, FileReferenceCreate,
     FileReferenceResponse, SignedUrlRequest, SignedUrlResponse, FileDeleteInfo
 )
 from app.auth import get_current_user, get_current_profile_id, CurrentUser, supabase_admin
@@ -231,47 +231,79 @@ async def get_delete_info(
 # ROUTES DYNAMIQUES (doivent etre APRES les routes statiques)
 # ============================================
 
-@router.get("/{entity_type}/{entity_id}", response_model=List[FileResponse])
+@router.get("/{entity_type}/{entity_id}", response_model=FileListResponse)
 async def list_files(
     entity_type: EntityType,
     entity_id: str,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
     user: CurrentUser = Depends(get_current_user)
 ):
-    """Liste tous les fichiers d'une entite (sources + references)"""
+    """Liste tous les fichiers d'une entite (sources + references) avec pagination"""
     try:
         files = []
 
-        # 1. Fichiers sources (origin)
-        source_response = supabase_admin.table("files")\
-            .select("*")\
+        # 1. Compter les sources et references
+        source_count_resp = supabase_admin.table("files")\
+            .select("id", count="exact")\
             .eq("origin_entity_type", entity_type.value)\
             .eq("origin_entity_id", entity_id)\
-            .order("created_at", desc=True)\
             .execute()
+        sources_count = source_count_resp.count or 0
 
-        for f in source_response.data:
-            f["signed_url"] = _get_signed_url(f["file_path"])
-            f["is_reference"] = False
-            f["reference_id"] = None
-            files.append(f)
-
-        # 2. Fichiers references (partages)
-        ref_response = supabase_admin.table("files_reference")\
-            .select("*, files(*)")\
+        ref_count_resp = supabase_admin.table("files_reference")\
+            .select("id", count="exact")\
             .eq("entity_type", entity_type.value)\
             .eq("entity_id", entity_id)\
-            .order("created_at", desc=True)\
             .execute()
+        refs_count = ref_count_resp.count or 0
 
-        for ref in ref_response.data:
-            if ref.get("files"):
-                f = ref["files"]
+        total = sources_count + refs_count
+
+        # 2. Recuperer les sources pour cette page
+        source_take = 0
+        if offset < sources_count:
+            source_take = min(limit, sources_count - offset)
+            source_response = supabase_admin.table("files")\
+                .select("*")\
+                .eq("origin_entity_type", entity_type.value)\
+                .eq("origin_entity_id", entity_id)\
+                .order("created_at", desc=True)\
+                .range(offset, offset + source_take - 1)\
+                .execute()
+
+            for f in source_response.data:
                 f["signed_url"] = _get_signed_url(f["file_path"])
-                f["is_reference"] = True
-                f["reference_id"] = ref["id"]
+                f["is_reference"] = False
+                f["reference_id"] = None
                 files.append(f)
 
-        return files
+        # 3. Si la page n'est pas pleine, completer avec les references
+        remaining = limit - source_take
+        if remaining > 0:
+            ref_offset = max(0, offset - sources_count)
+            ref_response = supabase_admin.table("files_reference")\
+                .select("*, files(*)")\
+                .eq("entity_type", entity_type.value)\
+                .eq("entity_id", entity_id)\
+                .order("created_at", desc=True)\
+                .range(ref_offset, ref_offset + remaining - 1)\
+                .execute()
+
+            for ref in ref_response.data:
+                if ref.get("files"):
+                    f = ref["files"]
+                    f["signed_url"] = _get_signed_url(f["file_path"])
+                    f["is_reference"] = True
+                    f["reference_id"] = ref["id"]
+                    files.append(f)
+
+        return FileListResponse(
+            items=files,
+            total=total,
+            offset=offset,
+            limit=limit
+        )
 
     except Exception as e:
         raise HTTPException(

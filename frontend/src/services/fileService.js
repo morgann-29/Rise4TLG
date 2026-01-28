@@ -33,10 +33,13 @@ export const fileService = {
   // ============================================
 
   /**
-   * Liste tous les fichiers d'une entite (sources + references)
+   * Liste tous les fichiers d'une entite (sources + references) - pagine
+   * @returns {Promise<{items: Array, total: number, offset: number, limit: number}>}
    */
-  async getFiles(entityType, entityId) {
-    const response = await api.get(`/api/files/${entityType}/${entityId}`)
+  async getFiles(entityType, entityId, { offset = 0, limit = 20 } = {}) {
+    const response = await api.get(`/api/files/${entityType}/${entityId}`, {
+      params: { offset, limit }
+    })
     return response.data
   },
 

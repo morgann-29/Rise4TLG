@@ -82,6 +82,13 @@ class SignedUrlResponse(BaseModel):
     urls: dict  # {path: signed_url}
 
 
+class FileListResponse(BaseModel):
+    items: List[FileResponse]
+    total: int
+    offset: int
+    limit: int
+
+
 class FileDeleteInfo(BaseModel):
     is_source: bool
     has_references: bool
